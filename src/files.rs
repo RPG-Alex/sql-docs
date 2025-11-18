@@ -1,6 +1,7 @@
 //! The module for working with and loading the content from `sql` files
 use std::fs;
 use std::io;
+use std::io::Error;
 use std::path::{Path, PathBuf};
 
 pub struct SqlFilesList {
@@ -14,6 +15,9 @@ impl SqlFilesList {
             sql_files: recursive_scan,
         })
     }
+    pub fn sql_files(&self) -> &Vec<PathBuf> {
+        return &self.sql_files;
+    }
 }
 
 /// Helper function to recursively scan the specified directory and collect all sql files found
@@ -22,7 +26,10 @@ fn recursive_dir_scan(path: &Path) -> io::Result<Vec<PathBuf>> {
     for entry in fs::read_dir(path)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() && path.extension().unwrap() == "sql" {
+        if path.is_file() && path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        == Some("sql") {
             sql_files.push(path);
         } else if path.is_dir() {
             let nested = recursive_dir_scan(&path)?;
@@ -32,15 +39,39 @@ fn recursive_dir_scan(path: &Path) -> io::Result<Vec<PathBuf>> {
     Ok(sql_files)
 }
 
+#[derive(Debug)]
 pub struct SqlFile {
     path: PathBuf,
     content: String,
 }
+impl SqlFile {
+     pub fn new(path: &Path) -> io::Result<SqlFile> {
+        let content = fs::read_to_string(path)?;
+        Ok(SqlFile { path: path.to_owned(), content })
+     }
+}
 
+#[derive(Debug)]
 pub struct SqlFileSet {
     files_contents: Vec<SqlFile>
 }
 
+impl SqlFileSet {
+    pub fn new(path: &Path) -> io::Result<SqlFileSet> {
+        let sql_files_list = SqlFilesList::new(path)?;
+
+        let files_contents = sql_files_list
+            .sql_files()
+            .iter()
+            .map(|p| SqlFile::new(p))
+            .collect::<io::Result<Vec<_>>>()?;
+
+        Ok(SqlFileSet { files_contents })
+    }
+    pub fn iter(&self) -> impl Iterator<Item = &SqlFile> {
+        self.files_contents.iter()
+    } 
+}
 
 #[cfg(test)]
 mod tests {
