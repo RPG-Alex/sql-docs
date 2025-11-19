@@ -3,17 +3,40 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+pub struct DenyList {
+    deny_files: Vec<PathBuf>,
+}
+
+impl DenyList {
+    pub fn new(files: Vec<String>) -> DenyList {
+        let buf_files= files.iter().map(|f| PathBuf::from(f)).collect();
+        DenyList { deny_files: buf_files }
+    }
+    pub fn deny_files(&self) -> &Vec<PathBuf> {
+        &self.deny_files
+    }
+}
+
 pub struct SqlFilesList {
     sql_files: Vec<PathBuf>,
 }
 
 impl SqlFilesList {
-    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<SqlFilesList> {
+    pub fn new<P: AsRef<Path>>(path: P, deny_list: Option<Vec<String>>) -> io::Result<SqlFilesList> {
         let recursive_scan = recursive_dir_scan(path.as_ref())?;
-        Ok(SqlFilesList {
-            sql_files: recursive_scan,
-        })
+        let allow_list = if let Some(list) = deny_list {
+            let deny = DenyList::new(list);
+            recursive_scan
+                .into_iter()
+                .filter(|p| !deny.deny_files().contains(p))
+                .collect()
+        } else {
+            recursive_scan
+        };
+
+        Ok(SqlFilesList { sql_files: allow_list })
     }
+
     pub fn sql_files(&self) -> &[PathBuf] {
         &self.sql_files
     }
@@ -61,8 +84,8 @@ pub struct SqlFileSet {
 }
 
 impl SqlFileSet {
-    pub fn new(path: &Path) -> io::Result<SqlFileSet> {
-        let sql_files_list = SqlFilesList::new(path)?;
+    pub fn new(path: &Path, deny_list: Option<Vec<String>>) -> io::Result<SqlFileSet> {
+        let sql_files_list = SqlFilesList::new(path, deny_list)?;
 
         let files_contents = sql_files_list
             .sql_files()
