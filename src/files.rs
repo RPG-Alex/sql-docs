@@ -8,7 +8,7 @@ use std::{
 
 /// A list of SQL files that should be excluded from processing.
 ///
-/// Entries in the deny list are treated as full paths [`PathBuf`]s).
+/// Entries in the deny list are treated as full [`PathBuf`] paths.
 pub struct DenyList {
     deny_files: Vec<PathBuf>,
 }
@@ -36,12 +36,12 @@ impl SqlFilesList {
     /// Recursively scans `path` for `.sql` files and returns a filtered list.
     /// # Parameters
     ///
-    /// - `path`: any type that can implement the `AsRef<Path>` trait
-    /// - `deny_list`: An optional `Vec` of `String` types.
+    /// - `path`: any type that implements [`AsRef<Path>`].
+    /// - `deny_list`: optional list of path-like strings representing files to exclude.
     ///
     /// # Errors
     ///
-    /// Returns an [`io::Error`] if the file cannot be read.
+    /// Returns an [`io::Error`] if directory traversal fails.
     pub fn new<P: AsRef<Path>>(path: P, deny_list: Option<Vec<String>>) -> io::Result<Self> {
         let recursive_scan = recursive_dir_scan(path.as_ref())?;
         let allow_list = if let Some(list) = deny_list {
