@@ -151,6 +151,9 @@ impl fmt::Display for CommentError {
 
 impl std::error::Error for CommentError {}
 
+/// Alias for comment results that may return a [`CommentError`]
+pub type CommentResult<T> = Result<T, CommentError>;
+
 /// Structure that holds the comment along with its location in the file
 pub struct CommentWithSpan {
     comment: Comment,
@@ -211,12 +214,12 @@ impl Comments {
 
     /// Build all leading comments from a parsed SQL file
     #[must_use]
-    pub fn parse_all_comments_from_file(file: &ParsedSqlFile) -> Self {
+    pub fn parse_all_comments_from_file(file: &ParsedSqlFile) -> CommentResult<Self> {
         let src = file.content();
         let mut comments = Vec::new();
         let mut current_location = Location::default();
 
-        Self { comments }
+        Ok(Self { comments })
     }
 
     /// Scans the raw file and collects all comments
