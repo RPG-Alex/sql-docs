@@ -9,11 +9,12 @@ use crate::ast::ParsedSqlFile;
 
 /// Structure for holding a location in the file. Assumes file is first split by
 /// lines and then split by characters (column)
-#[derive(Debug)]
+#[derive(Debug,PartialEq,PartialOrd)]
 pub struct Location {
     line: u64,
     column: u64,
 }
+
 
 impl Location {
     /// Method for instantiating a new [`Location`]
@@ -46,6 +47,7 @@ impl Default for Location {
 }
 
 /// A structure for holding the span of comments found
+#[derive(Debug,PartialEq)]
 pub struct Span {
     start: Location,
     end: Location,
@@ -76,8 +78,16 @@ impl Span {
     }
 }
 
+impl Default for Span {
+    fn default() -> Self {
+        Self::new(Location::default(), Location::default())
+    }
+}
+
+
 /// Enum for holding the comment content, differentiated by single line `--` and
 /// multiline `/* */`
+#[derive(Clone, Debug,PartialEq)]
 pub enum CommentKind {
     /// Enum variant for Multiline Comments
     MultiLine(String),
@@ -242,3 +252,73 @@ impl Comments {
         &self.comments
     }
 }
+
+#[cfg(test)]
+    use super::*;
+
+    #[test]
+    fn location_new_and_default() {
+        let mut location = Location::new(2, 5);
+        location.column = 20;
+        location.line = 43;
+
+        assert_eq!(
+            Location { column: 20, line: 43 },
+            location
+        );
+
+        let location2 = Location::default();
+        assert_eq!(location2, Location { line: 0, column: 0 });
+    }
+
+    
+    #[test]
+    fn span_default_and_updates() {
+        let default = Span::default();
+        assert_eq!(default.start, Location::default());
+        assert_eq!(default.end, Location::default());
+
+        let mut span = Span::default();
+        span.end = Location::new(55, 100);
+
+        assert_eq!(span.start, Location::default());
+        assert_eq!(span.end, Location { line: 55, column: 100 });
+    }
+
+
+    #[test]
+    fn comments_with_comment_kind() {
+        let raw_comment = "-- a comment";
+        let len = raw_comment.len() as u64;
+
+        let singleline = CommentKind::SingleLine(raw_comment.to_string());
+        let mut span = Span::default();
+        span.end.column = len - 1;
+
+        let comment = Comment::new(singleline.clone(), span);
+
+        assert_eq!(comment.kind, singleline);
+
+        let expected_span = Span::new(
+            Location { line: 0, column: 0 },
+            Location { line: 0, column: len - 1 },
+        );
+
+        assert_eq!(comment.span, expected_span);
+    }
+
+    #[test]
+    fn multiline_comment_span() {
+        let kind = CommentKind::MultiLine("/* hello\nworld */".to_string());
+        let span = Span::new(
+            Location { line: 1, column: 0 },
+            Location { line: 2, column: 9 },
+        );
+
+        let comment = Comment::new(kind.clone(), span);
+
+        assert_eq!(comment.kind, kind);
+        assert_eq!(comment.span.start.line, 1);
+        assert_eq!(comment.span.end.line, 2);
+    }
+
