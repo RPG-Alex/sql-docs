@@ -3,9 +3,9 @@
 //!
 //! *leading comment* a comment that
 //! precedes an SQL Statement.
-use std::fmt;
+use std::{fmt, path::Path};
 
-use crate::ast::ParsedSqlFile;
+use crate::{ast::ParsedSqlFile, files::{SqlFile, SqlFilesList}};
 
 /// Structure for holding a location in the file. Assumes file is first split by
 /// lines and then split by characters (column)
@@ -135,22 +135,35 @@ impl Comment {
 /// Enum for returning errors withe Comment parsing
 #[derive(Debug)]
 pub enum CommentError {
-    /// Found a block terminator `*/` without a matching opener `/*`
-    UnmatchedBlockCommentStart {
-        /// Returns the location of the block terminator found
+    /// Found a multiline comment terminator `*/` without a matching opener `/*`
+    UnmatchedMultilineCommentStart {
+        /// Returns the location of the terminator found
         location: Location,
     },
+    /// Found a multiline comment that is not properly terminated before EOF
+    UnterminatedMultiLineComment {
+        /// Returns the location of where the multiline comment started
+        start: Location
+    }
 }
 
 impl fmt::Display for CommentError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CommentError::UnmatchedBlockCommentStart { location } => {
+            Self::UnmatchedMultilineCommentStart { location } => {
                 write!(
                     f,
                     "unmatched block comment start at line {}, column {}",
                     location.line(),
                     location.column()
+                )
+            },
+            Self::UnterminatedMultiLineComment { start } => {
+                write!(
+                    f,
+                    "unterminated block comment with start at line {}, column {}",
+                    start.line(),
+                    start.column(),
                 )
             }
         }
@@ -221,12 +234,13 @@ impl Comments {
     }
 
     /// Build all leading comments from a parsed SQL file
-    /// 
+    ///
     /// # Parameters
     /// - `file`: the [`ParsedSqlFile`] that needs to be parsed for comments
-    /// 
+    ///
     /// # Errors
-    /// - Will return [`CommentError::UnmatchedBlockCommentStart`] if a comment does not have an opening `/*`
+    /// - Will return [`CommentError::UnmatchedBlockCommentStart`] if a comment
+    ///   does not have an opening `/*`
     pub fn parse_all_comments_from_file(file: &ParsedSqlFile) -> CommentResult<Self> {
         let src = file.content();
         let comments = Self::scan_comments(src)?;
@@ -237,76 +251,115 @@ impl Comments {
     ///
     /// # Parameters
     /// - `src` which is the `SQL` file content as a [`str`]
+    /// 
+    /// # Errors
+    /// - `UnmatchedMultilineCommentStart` : will return error if unable to find a starting `/*` for a multiline comment
+    /// - `UnterminatedMultiLineComment` : will return error if there is an unterminated multiline comment, found at EOF
     pub fn scan_comments(src: &str) -> CommentResult<Self> {
         let mut comments = Vec::new();
-        let mut current_line = 0u64;
-        let mut current_column = 0u64;
 
         let mut start_line = 0u64;
-        let mut start_column = 0u64;
+        let mut start_col = 0u64;
 
-        let mut single_line = String::new();
-        let mut multi_line = String::new();
+        let mut line = 0u64;
+        let mut col = 0u64;
 
-        let mut src_state_machine = src.chars().peekable();
-        while !src_state_machine.peek().is_none() {
-            if let Some(c) = src_state_machine.next(){
-                match c {
-                    '-' => {
-                        if single_line.is_empty() {
-                            single_line.push(c);
-                            start_column = current_column;
-                            start_line = current_line;
-                        } else if single_line.chars().last() == Some('-') {
-                            single_line.push(c);
-                        }
-                    },
-                    '/' => {
-                        if multi_line.is_empty() {
-                            multi_line.push(c);
-                            start_column = current_column;
-                            start_line = current_line;
-                        } else if multi_line.chars().last() == Some('*') {
-                            multi_line.push(c);
-                             comments.push(Comment { kind: CommentKind::MultiLine(multi_line.clone()), span: Span { start: Location { line: start_line, column: start_column }, end: Location { line: current_line, column: current_column+1 } } });
-                             multi_line.clear();
-                        }
-                    },
-                    '*' => {
-                        if !multi_line.is_empty() {
-                            multi_line.push(c);
-                        }
-                    },
-                    '\n' => {
-                        if !single_line.is_empty() {
-                            comments.push(Comment { kind: CommentKind::SingleLine(single_line.clone()), span: Span { start: Location { line: start_line, column: start_column+1 }, end: Location { line: current_line, column: current_column } } });
-                            single_line.clear();
-                        } else if !multi_line.is_empty() {
-                            multi_line.push(c);
-                        }
-                    },
-                    _ => {
-                        if !single_line.is_empty() {
-                            single_line.push(c);
-                        } else if !multi_line.is_empty() {
-                            multi_line.push(c);
-                        }
+        let mut in_single = false;
+        let mut in_block = false;
+
+
+        let mut buf = String::new();
+
+        let mut chars = src.chars().peekable();
+
+
+        while let Some(c) = chars.next() {
+            match (in_single, in_block, c) {
+                (false, false, '-') => {
+                    if chars.peek().copied() == Some('-') {
+                        chars.next(); 
+                        in_single = true;
+                        start_line = line;
+                        start_col = col; 
+                        buf.clear();
+                        buf.push('-');
+                        buf.push('-');
+                        col += 1;
                     }
-                }
-                if c == '\n' {
-                    current_column = 0;
-                    current_line += 1;
-                } else {
-                    current_column += 1;
-                }
+                },
+                (false, false, '/') => {
+                    if chars.peek().copied() == Some('*') {
+                        chars.next();
+                        in_block = true;
+                        start_line = line;
+                        start_col = col; 
+                        buf.clear();
+                        col += 1; 
+                    }
+                },
+                (false, false, '*') => {
+                    if chars.peek().copied() == Some('*') {
+                        let loc = Location::new(line, col);
+                        return Err(CommentError::UnmatchedMultilineCommentStart { location: loc });
+                    }
+                },
+                (true, false, '\n') => {
+                    let end_loc = Location::new(line, col);
+                    comments.push(Comment::new(
+                        CommentKind::SingleLine(buf.clone()),
+                        Span::new(Location { line: start_line, column: start_col}, end_loc),
+                    ));
+                    in_single = false;
+                    buf.clear();
+                },
+                (false, true, '*') => {
+                    if chars.peek().copied() == Some('/'){
+                        chars.next();
+                        buf.push('*'); 
+                        buf.push('/'); 
+                        let end_loc = Location::new(line, col + 1);
+                        comments.push(Comment::new(
+                            CommentKind::MultiLine(buf.trim().to_string()),
+                            Span::new(Location { line: start_line, column: start_col}, end_loc),
+                        ));
+                        in_block = false;
+                        buf.clear();
+                        col += 1;
+                    } else {
+                        buf.push('*');
+                    }    
+                },
+                (false, true, '\n') => {
+                    buf.push('\n');
+                },
+                (false, true, ch) | (true, false, ch)=> {
+                    buf.push(ch);
+                },
+                (_, _, _) => unreachable!("cannot be in single-line and block comment at once"),
             }
+            if c == '\n' {
+                line += 1;
+                col = 0;
+            } else {
+                col += 1;
+            }
+        }
+
+        // EOF: close any open comments
+        if in_block {
+            return Err(CommentError::UnterminatedMultiLineComment { start: Location { line: start_line, column: start_col} });
+        }
+
+        if in_single && !buf.is_empty() {
+            let end_loc = Location::new(line, col);
+            comments.push(Comment::new(
+                CommentKind::SingleLine(buf.trim_end().to_string()),
+                Span::new(Location { line: start_line, column: start_col}, end_loc),
+            ));
         }
 
         Ok(Self { comments })
     }
-    /// Parse single line comments
-
-    /// Parse multi line comments
 
     /// Getter method for retrieving the Vec of [`Comment`]
     #[must_use]
@@ -316,7 +369,6 @@ impl Comments {
 }
 
 #[cfg(test)]
-use super::*;
 
 #[test]
 fn location_new_and_default() {
@@ -372,4 +424,34 @@ fn multiline_comment_span() {
     assert_eq!(comment.kind, kind);
     assert_eq!(comment.span.start.line, 1);
     assert_eq!(comment.span.end.line, 2);
+}
+
+#[test]
+fn parse_single_line_comments() {
+    use std::fs;
+    use crate::files::SqlFileSet;
+    use crate::ast::ParsedSqlFileSet;
+    let path = Path::new("sql_files");
+    let set = SqlFileSet::new(path, None).unwrap();
+    let parsed_set = ParsedSqlFileSet::parse_all(set).unwrap();
+    for file in parsed_set.files().iter() {
+        let parsed_comments = Comments::parse_all_comments_from_file(file).unwrap(); 
+        match file.file().path().to_str().unwrap() {
+            "sql_files/with_comments.sql" => {
+                println!("succeeded!");
+            },
+            "sql_files/without_comments.sql" => {
+
+            },
+            _ => unreachable!("This shouldn't be accessible if directory parsed correctly")
+        }
+    }
+
+
+}
+
+
+#[test]
+fn parse_multi_line_comments() {
+    
 }
