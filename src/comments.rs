@@ -229,17 +229,15 @@ impl Comments {
     /// - Will return [`CommentError::UnmatchedBlockCommentStart`] if a comment does not have an opening `/*`
     pub fn parse_all_comments_from_file(file: &ParsedSqlFile) -> CommentResult<Self> {
         let src = file.content();
-        let mut comments = Vec::new();
-        let mut current_location = Location::default();
-
-        Ok(Self { comments })
+        let comments = Self::scan_comments(src)?;
+        Ok(comments)
     }
 
     /// Scans the raw file and collects all comments
     ///
     /// # Parameters
     /// - `src` which is the `SQL` file content as a [`str`]
-    fn scan_comments(src: &str) -> CommentResult<Self> {
+    pub fn scan_comments(src: &str) -> CommentResult<Self> {
         let mut comments = Vec::new();
         let mut current_line = 0u64;
         let mut current_column = 0u64;
@@ -250,46 +248,62 @@ impl Comments {
         let mut single_line = String::new();
         let mut multi_line = String::new();
 
-        let mut current_comment = String::new();
-        //let mut src_state_machine = src.chars().peekable();
-        let mut lines = src.lines().into_iter();
-        for line in lines {
-            for (i, c) in line.chars().into_iter().enumerate() {
+        let mut src_state_machine = src.chars().peekable();
+        while !src_state_machine.peek().is_none() {
+            if let Some(c) = src_state_machine.next(){
                 match c {
                     '-' => {
-                        match i {
-                            0 => {
-                                single_line.push(c);
-                                start_column = i as u64;
-                            },
-                            1 => {
-                                match single_line.is_empty() {
-                                    false => {
-                                        if single_line.len() == 1  {
-                                            single_line.push(c);
-                                        }
-                                    },
-                                    _ => {}
-                                }
-                            }
+                        if single_line.is_empty() {
+                            single_line.push(c);
+                            start_column = current_column;
+                            start_line = current_line;
+                        } else if single_line.chars().last() == Some('-') {
+                            single_line.push(c);
                         }
                     },
-                    '/' => ,
-                    '*' => ,
+                    '/' => {
+                        if multi_line.is_empty() {
+                            multi_line.push(c);
+                            start_column = current_column;
+                            start_line = current_line;
+                        } else if multi_line.chars().last() == Some('*') {
+                            multi_line.push(c);
+                             comments.push(Comment { kind: CommentKind::MultiLine(multi_line.clone()), span: Span { start: Location { line: start_line, column: start_column }, end: Location { line: current_line, column: current_column+1 } } });
+                             multi_line.clear();
+                        }
+                    },
+                    '*' => {
+                        if !multi_line.is_empty() {
+                            multi_line.push(c);
+                        }
+                    },
+                    '\n' => {
+                        if !single_line.is_empty() {
+                            comments.push(Comment { kind: CommentKind::SingleLine(single_line.clone()), span: Span { start: Location { line: start_line, column: start_column+1 }, end: Location { line: current_line, column: current_column } } });
+                            single_line.clear();
+                        } else if !multi_line.is_empty() {
+                            multi_line.push(c);
+                        }
+                    },
                     _ => {
                         if !single_line.is_empty() {
                             single_line.push(c);
+                        } else if !multi_line.is_empty() {
+                            multi_line.push(c);
                         }
                     }
                 }
+                if c == '\n' {
+                    current_column = 0;
+                    current_line += 1;
+                } else {
+                    current_column += 1;
+                }
             }
-            
-            start_line += 1;
         }
 
         Ok(Self { comments })
     }
-
     /// Parse single line comments
 
     /// Parse multi line comments
