@@ -375,6 +375,17 @@ impl Comments {
     pub fn comments(&self) -> &[Comment] {
         &self.comments
     }
+
+    /// Helper method for checking and finding for a comment before a specific
+    /// line
+    ///
+    /// # Parameters
+    /// - `self` an instance of [`Comments`]
+    /// - `line` an `u64` value representing the desired line to check above.
+    #[must_use]
+    pub fn leading_comment(&self, line: u64) -> Option<&Comment> {
+        self.comments().iter().rev().find(|comment| comment.span().end().line() + 1 == line)
+    }
 }
 
 #[cfg(test)]
