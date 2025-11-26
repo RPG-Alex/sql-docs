@@ -339,7 +339,7 @@ impl Comments {
                 }
                 (false, true, ch) | (true, false, ch) => {
                     buf.push(ch);
-                }
+                },
                 (false, false, _) => {}
                 (true, true, _) => {
                     unreachable!("should not be possible to be in multiline and single line")
@@ -386,6 +386,21 @@ impl Comments {
     #[must_use]
     pub fn leading_comment(&self, line: u64) -> Option<&Comment> {
         self.comments().iter().rev().find(|comment| comment.span().end().line() + 1 == line)
+    }
+
+    /// Helper method for checking and finding for a comment before a specific
+    /// line for columns (hopefully temporary)
+    ///
+    /// # Parameters
+    /// - `self` an instance of [`Comments`]
+    /// - `line` an `u64` value representing the desired line to check above.
+    #[must_use]
+    pub fn leading_comment_column(&self, line: u64) -> Option<&Comment> {
+        dbg!(line);
+        let line = line -2;
+        let com = self.comments().iter().rev().find(|comment| comment.span().end().line() == line);
+        dbg!(&com);
+        com
     }
 }
 

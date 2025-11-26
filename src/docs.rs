@@ -1,5 +1,4 @@
-//! Module for parsing sql and comments and returning only comments connected to
-//! statements
+//! Module for parsing sql and comments and returning `table` and `column` information, including comments
 use sqlparser::ast::{Spanned, Statement};
 
 use crate::{ast::ParsedSqlFile, comments::Comments};
@@ -104,11 +103,14 @@ impl SqlDocs {
             #[allow(clippy::single_match)]
             match statement {
                 Statement::CreateTable(table) => {
-                    let table_start_line = table.span().start.line;
+                    let table_start = table.span().start.line;
                     let mut column_docs = Vec::new();
                     for column in &table.columns {
                         let column_start = column.span().start.line;
-                        let column_leading = comments.leading_comment(column_start);
+                        dbg!(&column_start);
+                        dbg!(&column.span().end.line);
+                        dbg!(&column.name);
+                        let column_leading = comments.leading_comment_column(column_start);
                         let column_name = column.name.value.clone();
                         let column_doc = match column_leading {
                             Some(col_comment) => {
@@ -118,7 +120,10 @@ impl SqlDocs {
                         };
                         column_docs.push(column_doc);
                     }
-                    let table_leading = comments.leading_comment(table_start_line);
+                    let table_leading = comments.leading_comment(table_start-1);
+                    dbg!(&table_start);
+                    dbg!(&table.span().end.line);
+                    dbg!(&table.name);
                     let table_doc = match table_leading {
                         Some(comment) => {
                             TableDoc::new(
@@ -161,83 +166,199 @@ mod tests {
         assert_eq!(sql_doc.tables().first().unwrap().name(), "user");
         assert_eq!(sql_doc.tables().first().unwrap().columns().first().unwrap().name(), "id");
     }
-    #[test]
-    fn generate_docs_from_mixed_comments() {
+
+        #[test]
+    fn generate_docs_files() {
         use std::path::Path;
 
-        use crate::{ast::ParsedSqlFileSet, files::SqlFileSet, comments::Comments};
+        use crate::{ast::ParsedSqlFileSet, comments::Comments, files::SqlFileSet};
+
         let path = Path::new("sql_files");
         let set = SqlFileSet::new(path, None).unwrap();
         let parsed_set = ParsedSqlFileSet::parse_all(set).unwrap();
-        for file in parsed_set.files().iter() {
+
+        for file in parsed_set.files() {
             let comments = Comments::parse_all_comments_from_file(file).unwrap();
             let docs = SqlDocs::from_parsed_file(file, &comments);
+
             match file.file().path().to_str().unwrap() {
                 "sql_files/with_single_line_comments.sql" => {
-                    let expected = [
-                        "Users table stores user account information",
-                        "Primary key",
-                        "Username for login",
-                        "Email address",
-                        "When the user registered",
-                        "Posts table stores blog posts",
-                        "Primary key",
-                        "Post title",
-                        "Foreign key linking to users",
-                        "Main body text",
-                        "When the post was created",
-                    ];
-                    assert_eq!(expected.len(), comments.comments().len());
-                    comments
-                        .comments()
-                        .iter()
-                        .enumerate()
-                        .for_each(|(i, c)| assert_eq!(expected[i], c.kind().comment()));
+                    let expected = SqlDocs::new(vec![
+                        TableDoc::new(
+                            "users".to_string(),
+                            Some("Users table stores user account information".to_string()),
+                            vec![
+                                ColumnDoc::new("id".to_string(), Some("Primary key".to_string())),
+                                ColumnDoc::new(
+                                    "username".to_string(),
+                                    Some("Username for login".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "email".to_string(),
+                                    Some("Email address".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "created_at".to_string(),
+                                    Some("When the user registered".to_string()),
+                                ),
+                            ],
+                        ),
+                        TableDoc::new(
+                            "posts".to_string(),
+                            Some("Posts table stores blog posts".to_string()),
+                            vec![
+                                ColumnDoc::new("id".to_string(), Some("Primary key".to_string())),
+                                ColumnDoc::new(
+                                    "title".to_string(),
+                                    Some("Post title".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "user_id".to_string(),
+                                    Some("Foreign key linking to users".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "body".to_string(),
+                                    Some("Main body text".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "published_at".to_string(),
+                                    Some("When the post was created".to_string()),
+                                ),
+                            ],
+                        ),
+                    ]);
+
+                    assert_eq!(docs, expected);
                 }
                 "sql_files/with_multiline_comments.sql" => {
-                    let expected = [
-                        "Users table stores user account information \nmultiline",
-                        "Primary key \n    multiline",
-                        "Username for login \n    multiline",
-                        "Email address \n    multiline",
-                        "When the user registered \n    multiline",
-                        "Posts table stores blog posts \nmultiline",
-                        "Primary key \n    multiline",
-                        "Post title \n    multiline",
-                        "Foreign key linking to users \n    multiline",
-                        "Main body text \n    multiline",
-                        "When the post was created \n    multiline",
-                    ];
-                    assert_eq!(expected.len(), comments.comments().len());
-                    comments
-                        .comments()
-                        .iter()
-                        .enumerate()
-                        .for_each(|(i, c)| assert_eq!(expected[i], c.kind().comment()));
+                    let expected = SqlDocs::new(vec![
+                        TableDoc::new(
+                            "users".to_string(),
+                            Some("Users table stores user account information \nmultiline".to_string()),
+                            vec![
+                                ColumnDoc::new(
+                                    "id".to_string(),
+                                    Some("Primary key \n    multiline".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "username".to_string(),
+                                    Some("Username for login \n    multiline".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "email".to_string(),
+                                    Some("Email address \n    multiline".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "created_at".to_string(),
+                                    Some("When the user registered \n    multiline".to_string()),
+                                ),
+                            ],
+                        ),
+                        TableDoc::new(
+                            "posts".to_string(),
+                            Some("Posts table stores blog posts \nmultiline".to_string()),
+                            vec![
+                                ColumnDoc::new(
+                                    "id".to_string(),
+                                    Some("Primary key \n    multiline".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "title".to_string(),
+                                    Some("Post title \n    multiline".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "user_id".to_string(),
+                                    Some("Foreign key linking to users \n    multiline".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "body".to_string(),
+                                    Some("Main body text \n    multiline".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "published_at".to_string(),
+                                    Some("When the post was created \n    multiline".to_string()),
+                                ),
+                            ],
+                        ),
+                    ]);
+
+                    assert_eq!(docs, expected);
                 }
                 "sql_files/with_mixed_comments.sql" => {
-                    let expected = [
-                        "Users table stores user account information",
-                        "Primary key",
-                        "Username for login",
-                        "Email address",
-                        "When the user registered",
-                        "Posts table stores blog posts",
-                        "Primary key",
-                        "Post title",
-                        "Foreign key linking to users",
-                        "Main body text",
-                        "When the post was created",
-                    ];
-                    assert_eq!(expected.len(), comments.comments().len());
-                    comments
-                        .comments()
-                        .iter()
-                        .enumerate()
-                        .for_each(|(i, c)| assert_eq!(expected[i], c.kind().comment()));
+                    // Mixed should still produce the same final docs as the pure single-line version.
+                    let expected = SqlDocs::new(vec![
+                        TableDoc::new(
+                            "users".to_string(),
+                            Some("Users table stores user account information".to_string()),
+                            vec![
+                                ColumnDoc::new("id".to_string(), Some("Primary key".to_string())),
+                                ColumnDoc::new(
+                                    "username".to_string(),
+                                    Some("Username for login".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "email".to_string(),
+                                    Some("Email address".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "created_at".to_string(),
+                                    Some("When the user registered".to_string()),
+                                ),
+                            ],
+                        ),
+                        TableDoc::new(
+                            "posts".to_string(),
+                            Some("Posts table stores blog posts".to_string()),
+                            vec![
+                                ColumnDoc::new("id".to_string(), Some("Primary key".to_string())),
+                                ColumnDoc::new(
+                                    "title".to_string(),
+                                    Some("Post title".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "user_id".to_string(),
+                                    Some("Foreign key linking to users".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "body".to_string(),
+                                    Some("Main body text".to_string()),
+                                ),
+                                ColumnDoc::new(
+                                    "published_at".to_string(),
+                                    Some("When the post was created".to_string()),
+                                ),
+                            ],
+                        ),
+                    ]);
+
+                    assert_eq!(docs, expected);
                 }
                 "sql_files/without_comments.sql" => {
-                    assert_eq!(0, comments.comments().len());
+                    let expected = SqlDocs::new(vec![
+                        TableDoc::new(
+                            "users".to_string(),
+                            None,
+                            vec![
+                                ColumnDoc::new("id".to_string(), None),
+                                ColumnDoc::new("username".to_string(), None),
+                                ColumnDoc::new("email".to_string(), None),
+                                ColumnDoc::new("created_at".to_string(), None),
+                            ],
+                        ),
+                        TableDoc::new(
+                            "posts".to_string(),
+                            None,
+                            vec![
+                                ColumnDoc::new("id".to_string(), None),
+                                ColumnDoc::new("title".to_string(), None),
+                                ColumnDoc::new("user_id".to_string(), None),
+                                ColumnDoc::new("body".to_string(), None),
+                                ColumnDoc::new("published_at".to_string(), None),
+                            ],
+                        ),
+                    ]);
+
+                    assert_eq!(docs, expected);
                 }
                 _ => {
                     unreachable!(
@@ -246,7 +367,7 @@ mod tests {
                     )
                 }
             }
-
         }
     }
+
 }
