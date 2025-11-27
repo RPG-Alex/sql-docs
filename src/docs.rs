@@ -100,7 +100,6 @@ impl SqlDocs {
     #[must_use]
     pub fn from_parsed_file(file: &ParsedSqlFile, comments: &Comments) -> Self {
         let mut tables = Vec::new();
-        dbg!(comments);
         for statement in file.statements() {
             #[allow(clippy::single_match)]
             match statement {

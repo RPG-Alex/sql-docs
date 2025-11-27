@@ -196,7 +196,7 @@ impl CommentWithSpan {
     ///
     /// # Parameters
     /// - the comment as a [`String`]
-    /// - the span of the comment as a [`CommentSpan`]
+    /// - the span of the comment as a [`Span`]
     #[must_use]
     pub const fn new(comment: Comment, span: Span) -> Self {
         Self { comment, span }
@@ -208,7 +208,7 @@ impl CommentWithSpan {
         &self.comment
     }
 
-    /// Getter method for retrieving the [`CommentSpan`] of the comment
+    /// Getter method for retrieving the [`Span`] of the comment
     #[must_use]
     pub const fn span(&self) -> &Span {
         &self.span
@@ -249,8 +249,9 @@ impl Comments {
     /// - `file`: the [`ParsedSqlFile`] that needs to be parsed for comments
     ///
     /// # Errors
-    /// - Will return [`CommentError::UnmatchedBlockCommentStart`] if a comment
+    /// - Will return [`CommentError::UnmatchedMultilineCommentStart`] if a comment
     ///   does not have an opening `/*`
+    /// - Will return [`CommentError::UnterminatedMultiLineComment`] if a multiline comment doesn't end before `EOF`
     pub fn parse_all_comments_from_file(file: &ParsedSqlFile) -> CommentResult<Self> {
         let src = file.content();
         let comments = Self::scan_comments(src)?;
