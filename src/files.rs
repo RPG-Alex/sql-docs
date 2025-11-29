@@ -28,6 +28,7 @@ impl DenyList {
 }
 
 /// A collection of discovered `.sql` files under a given directory.
+#[derive(Debug)]
 pub struct SqlFilesList {
     sql_files: Vec<PathBuf>,
 }
@@ -281,4 +282,28 @@ mod tests {
         assert_eq!(found, expected);
         let _ = fs::remove_dir_all(&base);
     }
+
+    #[test]
+    fn test_file_fails() {
+        let invalid_dir = "INVALID";
+        let failed_list = SqlFilesList::new(invalid_dir, None);
+        assert!(failed_list.is_err());
+
+        let base = env::temp_dir().join("test_files_fails_dir");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        let bad_file = base.join("one.sql");
+        fs::File::create(&bad_file).unwrap();
+        let failed_read = SqlFilesList::new(&bad_file, None);
+        assert!(failed_read.is_err());
+        let missed_file = base.join("missing.sql");
+        let missing_file = SqlFile::new(&missed_file);
+        assert!(missing_file.is_err());
+        let _ = fs::remove_dir_all(&base);
+
+        let bad_file_list = SqlFileSet::new(Path::new(invalid_dir), None);
+        assert!(bad_file_list.is_err())
+
+    }
 }
+

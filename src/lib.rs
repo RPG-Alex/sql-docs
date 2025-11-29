@@ -87,9 +87,9 @@ impl From<ParserError> for DocError {
 ///   sql parsing)
 ///
 /// # Example
-/// ```no_run
+/// ```rust, no_run
 /// use sql_docs::generate_docs_from_dir;
-/// let docs = generate_docs_from_dir("sql_dir", &["skip_this.sql"])?;
+/// let docs = generate_docs_from_dir("sql_dir", &["skip_this.sql"]);
 /// ```
 pub fn generate_docs_from_dir<P: AsRef<Path>, S: AsRef<str>>(
     dir: P,
@@ -126,9 +126,9 @@ pub fn generate_docs_from_dir<P: AsRef<Path>, S: AsRef<str>>(
 ///   sql parsing)
 ///
 /// # Example
-/// ```no_run
-/// use sql_docs::generate_docs_from_dir;
-/// let docs = generate_docs_from_dir_no_deny("sql_dir")?;
+/// ```rust,no_run
+/// use sql_docs::generate_docs_from_dir_no_deny;
+/// let docs = generate_docs_from_dir_no_deny("sql_dir");
 /// ```
 pub fn generate_docs_from_dir_no_deny<P: AsRef<Path>>(
     dir: P,

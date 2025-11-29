@@ -13,7 +13,7 @@ It then attaches comments to the SQL structures they describe.
 ## Example 
 
 With a directory structured like this:
-```
+```bash
 sql_dir/
 └── users.sql
 ```
@@ -30,7 +30,7 @@ CREATE TABLE users (
 );
 ```
 A rudimentary implementation can be generated with:
-```rust
+```rust,no_run
 use sql_docs::generate_docs_from_dir_no_deny;
 use std::path::Path;
 
