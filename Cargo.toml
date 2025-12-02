@@ -27,6 +27,9 @@ categories = [
   "filesystem",
 ]
 
+[features]
+default = []
+fuzzing = []
 
 [dependencies]
 sqlparser = "0.59.0"

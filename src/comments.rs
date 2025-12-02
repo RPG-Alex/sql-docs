@@ -431,8 +431,6 @@ mod tests {
 
         for file in parsed_set.files() {
             let parsed_comments = Comments::parse_all_comments_from_file(file)?;
-
-            // Windows-safe: only care about the file name, not the separator style
             let filename = file
                 .file()
                 .path()

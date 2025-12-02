@@ -137,6 +137,43 @@ pub fn generate_docs_from_dir_no_deny<P: AsRef<Path>>(
     generate_docs_from_dir::<P, &str>(dir, &[])
 }
 
+/// Method for the fuzzer to use
+#[cfg(feature = "fuzzing")]
+pub fn fuzz_entry(sql: &str) {
+    use crate::{ast::ParsedSqlFileSet, comments::Comments, files::SqlFileSet, SqlDocs};
+    use std::env;
+    use std::fs;
+    use std::io::Write;
+    let base = env::temp_dir().join("sql_docs_fuzz");
+    if fs::create_dir_all(&base).is_err() {
+        return;
+    }
+    let file_path = base.join("fuzz_input.sql");
+    let mut file = match fs::File::create(&file_path) {
+        Ok(f) => f,
+        Err(_) => return,
+    };
+    if file.write_all(sql.as_bytes()).is_err() {
+        return;
+    }
+    let set = match SqlFileSet::new(base.as_path(), None) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let parsed_set = match ParsedSqlFileSet::parse_all(set) {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    for file in parsed_set.files() {
+        if let Ok(comments) = Comments::parse_all_comments_from_file(file) {
+            let _docs = SqlDocs::from_parsed_file(file, &comments);
+        }
+    }
+}
+
+
+
+
 #[cfg(test)]
 mod tests {
     use sqlparser::parser::ParserError;

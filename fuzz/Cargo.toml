@@ -12,10 +12,11 @@ libfuzzer-sys = "0.4"
 
 [dependencies.sql_docs]
 path = ".."
+features = ["fuzzing"]
 
 [[bin]]
-name = "fuzz_target_1"
-path = "fuzz_targets/fuzz_target_1.rs"
+name = "sql_docs"
+path = "fuzz_targets/sql_docs.rs"
 test = false
 doc = false
 bench = false
