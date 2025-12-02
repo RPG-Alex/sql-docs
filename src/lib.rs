@@ -183,10 +183,8 @@ fn test_with_no_deny_list_from_files() {
     let Ok(generated_docs) = generate_docs_from_dir_no_deny("sql_files") else {
         panic!("unable to locate test dir");
     };
-    let mut actual_paths: Vec<String> = generated_docs
-        .iter()
-        .map(|(path, _)| path.to_string_lossy().into_owned())
-        .collect();
+    let mut actual_paths: Vec<String> =
+        generated_docs.iter().map(|(path, _)| path.to_string_lossy().into_owned()).collect();
     actual_paths.sort();
     let mut expected_paths = vec![
         "sql_files/without_comments.sql".to_string(),
@@ -197,24 +195,16 @@ fn test_with_no_deny_list_from_files() {
     expected_paths.sort();
     assert_eq!(actual_paths, expected_paths);
     let target = Path::new("sql_files/with_mixed_comments.sql");
-    let Some((_, mixed_docs)) = generated_docs
-        .iter()
-        .find(|(path, _)| path.as_path() == target)
+    let Some((_, mixed_docs)) = generated_docs.iter().find(|(path, _)| path.as_path() == target)
     else {
         panic!("with_mixed_comments.sql should be present");
     };
     let table_names = ["users", "posts"];
-    let table_comments = [
-        "Users table stores user account information",
-        "Posts table stores blog posts",
-    ];
+    let table_comments =
+        ["Users table stores user account information", "Posts table stores blog posts"];
     let user_columns = ["id", "username", "email", "created_at"];
-    let user_columns_comments = [
-        "Primary key",
-        "Username for login",
-        "Email address",
-        "When the user registered",
-    ];
+    let user_columns_comments =
+        ["Primary key", "Username for login", "Email address", "When the user registered"];
     for (i, table) in mixed_docs.tables().iter().enumerate() {
         assert_eq!(table.name(), table_names[i]);
 
