@@ -179,42 +179,62 @@ fn test_with_deny_list_from_files() {
 
 #[test]
 fn test_with_no_deny_list_from_files() {
-    let generated_docs = generate_docs_from_dir_no_deny("sql_files")
-        .unwrap_or_else(|_| panic!("unable to locate test dir"));
-    let expected_paths = [
-        "sql_files/without_comments.sql",
-        "sql_files/with_multiline_comments.sql",
-        "sql_files/with_single_line_comments.sql",
-        "sql_files/with_mixed_comments.sql",
+    use std::path::Path;
+    let Ok(generated_docs) = generate_docs_from_dir_no_deny("sql_files") else {
+        panic!("unable to locate test dir");
+    };
+    let mut actual_paths: Vec<String> = generated_docs
+        .iter()
+        .map(|(path, _)| path.to_string_lossy().into_owned())
+        .collect();
+    actual_paths.sort();
+    let mut expected_paths = vec![
+        "sql_files/without_comments.sql".to_string(),
+        "sql_files/with_multiline_comments.sql".to_string(),
+        "sql_files/with_single_line_comments.sql".to_string(),
+        "sql_files/with_mixed_comments.sql".to_string(),
     ];
+    expected_paths.sort();
+    assert_eq!(actual_paths, expected_paths);
+    let target = Path::new("sql_files/with_mixed_comments.sql");
+    let Some((_, mixed_docs)) = generated_docs
+        .iter()
+        .find(|(path, _)| path.as_path() == target)
+    else {
+        panic!("with_mixed_comments.sql should be present");
+    };
     let table_names = ["users", "posts"];
-    let table_comments =
-        ["Users table stores user account information", "Posts table stores blog posts"];
+    let table_comments = [
+        "Users table stores user account information",
+        "Posts table stores blog posts",
+    ];
     let user_columns = ["id", "username", "email", "created_at"];
-    let user_columns_comments =
-        ["Primary key", "Username for login", "Email address", "When the user registered"];
-    for (i, (buf, sql_docs)) in generated_docs.iter().enumerate() {
-        assert_eq!(buf, expected_paths[i]);
-        if buf == "sql_files/with_mixed_comments.sql" {
-            for (i, table) in sql_docs.tables().iter().enumerate() {
-                assert_eq!(table.name(), table_names[i]);
-                match table.doc().as_ref() {
-                    Some(val) => assert_eq!(val, table_comments[i]),
-                    None => panic!("There should be a value for the table doc"),
-                }
-                if table.name() == "users" {
-                    for (i, column) in table.columns().iter().enumerate() {
-                        assert_eq!(column.name(), user_columns[i]);
-                        match column.doc().as_ref() {
-                            Some(val) => assert_eq!(val, user_columns_comments[i]),
-                            None => panic!("there should be a value for the doc column"),
-                        }
-                    }
+    let user_columns_comments = [
+        "Primary key",
+        "Username for login",
+        "Email address",
+        "When the user registered",
+    ];
+    for (i, table) in mixed_docs.tables().iter().enumerate() {
+        assert_eq!(table.name(), table_names[i]);
+
+        match table.doc().as_ref() {
+            Some(val) => assert_eq!(val, &table_comments[i]),
+            None => panic!("There should be a value for the table doc"),
+        }
+
+        if table.name() == "users" {
+            for (i, column) in table.columns().iter().enumerate() {
+                assert_eq!(column.name(), user_columns[i]);
+                match column.doc().as_ref() {
+                    Some(val) => assert_eq!(val, &user_columns_comments[i]),
+                    None => panic!("there should be a value for the doc column"),
                 }
             }
         }
     }
 }
+
 #[test]
 fn test_doc_errors() {
     use std::fs;
