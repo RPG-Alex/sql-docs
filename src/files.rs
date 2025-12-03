@@ -116,11 +116,7 @@ impl SqlFile {
     ///
     /// Returns an [`io::Error`] if the file cannot be read.
     pub fn new(path: &Path) -> io::Result<Self> {
-        let mut content = fs::read_to_string(path)?;
-        // handle edge case where sql is being parsed on windows and adds \r
-        if cfg!(windows) {
-            content = content.replace("\r\n", "\n");
-        }
+        let content = fs::read_to_string(path)?;
         Ok(Self { path: path.to_owned(), content })
     }
 

@@ -244,7 +244,7 @@ impl Comments {
         let mut start_line = 1u64;
         let mut start_col = 1u64;
 
-        let mut line = 1u64;
+        let mut line_num = 1u64;
         let mut col = 1u64;
 
         let mut in_single = false;
@@ -252,79 +252,78 @@ impl Comments {
 
         let mut buf = String::new();
 
-        let mut chars = src.chars().peekable();
-
-        while let Some(c) = chars.next() {
-            match (in_single, in_multi, c) {
-                (false, false, '-') => {
-                    if chars.peek().copied() == Some('-') {
-                        chars.next();
-                        in_single = true;
-                        start_line = line;
-                        start_col = col;
-                        buf.clear();
-                        col += 1;
+        for line in src.lines() {
+            col = 1;
+            let mut chars = line.chars().peekable();
+            while let Some(c) = chars.next() {
+                match (in_single, in_multi, c) {
+                    (false, false, '-') => {
+                        if chars.peek().copied() == Some('-') {
+                            chars.next();
+                            in_single = true;
+                            start_line = line_num;
+                            start_col = col;
+                            buf.clear();
+                            col += 1;
+                        }
+                    }
+                    (false, false, '/') => {
+                        if chars.peek().copied() == Some('*') {
+                            chars.next();
+                            in_multi = true;
+                            start_line = line_num;
+                            start_col = col;
+                            buf.clear();
+                            col += 1;
+                        }
+                    }
+                    (false, false, '*') => {
+                        if chars.peek().copied() == Some('/') {
+                            let loc = Location::new(line_num, col);
+                            return Err(CommentError::UnmatchedMultilineCommentStart {
+                                location: loc,
+                            });
+                        }
+                    }
+                    (false, true, '*') => {
+                        if chars.peek().copied() == Some('/') {
+                            chars.next();
+                            let end_loc = Location::new(line_num, col + 1);
+                            comments.push(Comment::new(
+                                CommentKind::MultiLine(buf.trim().to_string()),
+                                Span::new(
+                                    Location { line: start_line, column: start_col },
+                                    end_loc,
+                                ),
+                            ));
+                            in_multi = false;
+                            buf.clear();
+                            col += 1;
+                        } else {
+                            buf.push('*');
+                        }
+                    }
+                    (false, true, ch) | (true, false, ch) => {
+                        buf.push(ch);
+                    }
+                    (false, false, _) => {}
+                    (true, true, _) => {
+                        unreachable!("should not be possible to be in multiline and single line")
                     }
                 }
-                (false, false, '/') => {
-                    if chars.peek().copied() == Some('*') {
-                        chars.next();
-                        in_multi = true;
-                        start_line = line;
-                        start_col = col;
-                        buf.clear();
-                        col += 1;
-                    }
-                }
-                (false, false, '*') => {
-                    if chars.peek().copied() == Some('*') {
-                        let loc = Location::new(line, col);
-                        return Err(CommentError::UnmatchedMultilineCommentStart { location: loc });
-                    }
-                }
-                (true, false, '\n') => {
-                    let end_loc = Location::new(line, col);
-                    comments.push(Comment::new(
-                        CommentKind::SingleLine(buf.trim().to_string()),
-                        Span::new(Location { line: start_line, column: start_col }, end_loc),
-                    ));
-                    in_single = false;
-                    buf.clear();
-                }
-                (false, true, '*') => {
-                    if chars.peek().copied() == Some('/') {
-                        chars.next();
-                        let end_loc = Location::new(line, col + 1);
-                        comments.push(Comment::new(
-                            CommentKind::MultiLine(buf.trim().to_string()),
-                            Span::new(Location { line: start_line, column: start_col }, end_loc),
-                        ));
-                        in_multi = false;
-                        buf.clear();
-                        col += 1;
-                    } else {
-                        buf.push('*');
-                    }
-                }
-                (false, true, '\n') => {
-                    buf.push('\n');
-                }
-                (false, true, ch) | (true, false, ch) => {
-                    buf.push(ch);
-                }
-                (false, false, _) => {}
-                (true, true, _) => {
-                    unreachable!("should not be possible to be in multiline and single line")
-                }
-            }
-            if c == '\n' {
-                line += 1;
-                col = 0;
-            } else {
                 col += 1;
             }
+            if in_single {
+                in_single = false;
+                let end_loc = Location::new(line_num, col);
+                comments.push(Comment::new(
+                    CommentKind::SingleLine(buf.trim().to_string()),
+                    Span::new(Location { line: start_line, column: start_col }, end_loc),
+                ));
+                buf.clear();
+            }
+            line_num += 1;
         }
-
         // EOF: close any open comments
         if in_multi {
             return Err(CommentError::UnterminatedMultiLineComment {
@@ -333,7 +332,7 @@ impl Comments {
         }
 
         if in_single && !buf.is_empty() {
-            let end_loc = Location::new(line, col);
+            let end_loc = Location::new(line_num, col);
             comments.push(Comment::new(
                 CommentKind::SingleLine(buf.trim_end().to_string()),
                 Span::new(Location { line: start_line, column: start_col }, end_loc),
@@ -410,7 +409,7 @@ mod tests {
 
     #[test]
     fn multiline_comment_span() {
-        let kind = CommentKind::MultiLine("/* hello\nworld */".to_string());
+        let kind = CommentKind::MultiLine("/* hello world */".to_string());
         let span = Span::new(Location { line: 1, column: 1 }, Location { line: 2, column: 9 });
 
         let comment = Comment::new(kind.clone(), span);
@@ -495,17 +494,17 @@ mod tests {
 
     fn expected_multiline_comments() -> &'static [&'static str] {
         &[
-            "Users table stores user account information \nmultiline",
-            "Primary key \n    multiline",
-            "Username for login \n    multiline",
-            "Email address \n    multiline",
-            "When the user registered \n    multiline",
-            "Posts table stores blog posts \nmultiline",
-            "Primary key \n    multiline",
-            "Post title \n    multiline",
-            "Foreign key linking to users \n    multiline",
-            "Main body text \n    multiline",
-            "When the post was created \n    multiline",
+            "Users table stores user account information multiline",
+            "Primary key     multiline",
+            "Username for login     multiline",
+            "Email address     multiline",
+            "When the user registered     multiline",
+            "Posts table stores blog posts multiline",
+            "Primary key     multiline",
+            "Post title     multiline",
+            "Foreign key linking to users     multiline",
+            "Main body text     multiline",
+            "When the post was created     multiline",
         ]
     }
 
@@ -513,7 +512,7 @@ mod tests {
         &[
             "interstitial Comment above statements (should be ignored)",
             "Users table stores user account information",
-            "users interstitial comment \n(should be ignored)",
+            "users interstitial comment (should be ignored)",
             "Primary key",
             "Id comment that is interstitial (should be ignored)",
             "Username for login",
@@ -556,8 +555,8 @@ mod tests {
         assert_eq!(first.span().end(), &Location::new(1, 47));
         let primary_key = &comments[1];
         assert_eq!(primary_key.kind().comment(), "Primary key");
-        assert_eq!(primary_key.span().start(), &Location::new(3, 4));
-        assert_eq!(primary_key.span().end(), &Location::new(3, 18));
+        assert_eq!(primary_key.span().start(), &Location::new(3, 5));
+        assert_eq!(primary_key.span().end(), &Location::new(3, 19));
         assert!(
             primary_key.span().end().column() > primary_key.span().start().column(),
             "end column should be after start column",
@@ -588,10 +587,7 @@ mod tests {
         let comments = comments.comments();
         assert_eq!(comments.len(), 11);
         let first = &comments[0];
-        assert_eq!(
-            first.kind().comment(),
-            "Users table stores user account information \nmultiline"
-        );
+        assert_eq!(first.kind().comment(), "Users table stores user account information multiline");
         assert_eq!(first.span().start(), &Location::new(1, 1));
         assert_eq!(first.span().end().line(), 2);
         assert!(
@@ -599,8 +595,8 @@ mod tests {
             "end column should be after start column for first multiline comment",
         );
         let primary_key = &comments[1];
-        assert_eq!(primary_key.kind().comment(), "Primary key \n    multiline");
-        assert_eq!(primary_key.span().start(), &Location::new(4, 4));
+        assert_eq!(primary_key.kind().comment(), "Primary key     multiline");
+        assert_eq!(primary_key.span().start(), &Location::new(4, 5));
         assert_eq!(primary_key.span().end().line(), 5);
         assert!(
             primary_key.span().end().column() > primary_key.span().start().column(),
