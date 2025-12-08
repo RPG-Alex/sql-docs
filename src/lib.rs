@@ -75,6 +75,34 @@ impl From<ParserError> for DocError {
     }
 }
 
+/// Struct for the SqlDoc
+pub struct SqlDoc {
+    files: Vec<(PathBuf, SqlDocs)>,
+}
+
+impl SqlDoc {
+    pub fn table (&self, name: &str) -> Result<&TableDoc, DocError> {
+
+    }
+    pub fn table_with_schema(&self, schema: &str, name: &str) -> Result<&TableDoc, DocError> {
+
+    }
+    pub fn from_path(path: &Path) ->  {
+
+    }
+}
+/// Builder struct for the [`SqlDoc`]
+pub struct SqlDocBuilder {
+    sql_docs: SqlDoc,
+}
+impl SqlDocsBuilder {
+    fn new() -> Self {
+        Self {}
+    }
+}
+
+
+
 /// Primary Entry point. Returns a tuple of [`PathBuf`] and [`SqlDocs`].
 ///
 /// # Parameters:

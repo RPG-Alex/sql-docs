@@ -37,11 +37,13 @@ impl ColumnDoc {
     }
 }
 
-/// Structure for containing the `name` of the `Table`, an [`Option`] for the
-/// comment as a [`String`], and a `Vec` of [`ColumnDoc`] contained in the table
+/// Structure for containing the `name` of the `Table`, an [`Option`] for if the
+/// table has a schema,  an [`Option`] for the comment as a [`String`], and a 
+/// `Vec` of [`ColumnDoc`] contained in the table
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableDoc {
     name: String,
+    schema: Option<String>,
     doc: Option<String>,
     columns: Vec<ColumnDoc>,
 }
@@ -153,6 +155,9 @@ impl SqlDocs {
         &self.tables
     }
 }
+
+
+
 
 #[cfg(test)]
 mod tests {
