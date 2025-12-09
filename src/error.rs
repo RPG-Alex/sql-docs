@@ -1,5 +1,5 @@
 //! Module for managing Document Errors as [`DocError`]
-use crate::comments::CommentError;
+use crate::{comments::CommentError, docs::TableDoc};
 use core::fmt;
 use sqlparser::parser::ParserError;
 use std::{error, fmt::Debug};
@@ -21,6 +21,16 @@ pub enum DocError {
         /// The column number for the invalid [`sqlparser::ast::ObjectName`]
         column: u64,
     },
+    /// Table not found when searching [`crate::SqlDoc`]
+    TableNotFound {
+        /// The name of the table that was not found
+        name: String,
+    },
+    /// Duplicate tables with same name were found when searching [`crate::SqlDoc`]
+    DuplicateTablesFound {
+        /// `Vec` of the [`TableDoc`] for each duplicate table found
+        tables: Vec<TableDoc>
+    }
 }
 
 impl fmt::Display for DocError {
@@ -33,7 +43,16 @@ impl fmt::Display for DocError {
             Self::SqlParserError(parser_error) => write!(f, "SQL parse error {parser_error}"),
             Self::InvalidObjectName { message, line, column } => {
                 write!(f, "{message} at line {line}, column {column}")
+            },
+            Self::TableNotFound{name} => write!(f, "Table not found in SqlDoc: {name}"),
+            Self::DuplicateTablesFound { tables } => {
+                writeln!(f, "Duplicate tables found:")?;
+                for t in tables {
+                    writeln!(f, "{t}")?; 
+                }
+                Ok(())
             }
+
         }
     }
 }
@@ -44,7 +63,7 @@ impl error::Error for DocError {
             Self::FileReadError(e) => Some(e),
             Self::CommentError(e) => Some(e),
             Self::SqlParserError(e) => Some(e),
-            Self::InvalidObjectName { .. } => None,
+            Self::InvalidObjectName { .. } | Self::TableNotFound { .. } |  Self::DuplicateTablesFound { .. } => None,
         }
     }
 }

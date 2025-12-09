@@ -3,11 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::{
-    ast::ParsedSqlFileSet,
-    comments::Comments,
-    docs::{SqlFileDoc, TableDoc, ColumnDoc},
+    docs::{SqlFileDoc, TableDoc},
     error::DocError,
-    files::SqlFileSet,
 };
 
 /// Structure for Sql Documentation, built from [`TableDoc`] and 
@@ -34,8 +31,57 @@ enum SqlFileDocSource {
 }
 
 impl SqlDoc {
+    /// Method for generating builder from a directory. 
+    pub fn from_dir<P: AsRef<Path>>(root: P) -> SqlDocBuilder {
+        SqlDocBuilder { source: SqlFileDocSource::Dir(root.as_ref().to_path_buf()), deny: Vec::new() }
+    }
+    /// Method for generating builder from a [`Path`] of a single file 
+    pub fn from_path<P: AsRef<Path>>(path: P) -> SqlDocBuilder {
+        SqlDocBuilder { source: SqlFileDocSource::File(path.as_ref().to_path_buf()), deny: Vec::new() }
+    }
 
-
+    /// Method for finding a specific [`TableDoc`] by `name`
+    /// 
+    /// # Parameters
+    /// - the table `name` as a [`str`]
+    /// 
+    /// # Errors
+    /// - Will return [`DocError::TableNotFound`] if the expected table is not found
+    /// - Will return [`DocError::DuplicateTablesFound`] if more than one table is found
+    pub fn table(&self, table: &str) -> Result<&TableDoc, DocError> {
+        let matches = self.tables.iter().filter(|table_doc| table_doc.name() == table).collect::<Vec<&TableDoc>>();
+        match matches.as_slice() {
+            [] => Err(DocError::TableNotFound {
+                name: table.to_string(),
+            }),
+            [only] => Ok(*only),
+            _ => Err(DocError::DuplicateTablesFound {
+                tables: matches.into_iter().cloned().collect(),
+            }),
+        }
+    }
+    
+    /// Method for finding a specific [`TableDoc`] from `schema` and table `name`
+    /// 
+    /// # Parameters
+    /// - the table's `schema` as a [`str`]
+    /// - the table's `name` as a [`str`]
+    /// 
+    /// # Errors
+    /// - Will return [`DocError::TableNotFound`] if the expected table is not found
+    /// - Will return [`DocError::DuplicateTablesFound`] if more than one table is found
+    pub fn table_with_schema(&self, schema: &str, name: &str) -> Result<&TableDoc, DocError> {
+        let matches = self.tables.iter().filter(|table_doc| table_doc.name() == name && table_doc.schema() == Some(schema)).collect::<Vec<&TableDoc>>();
+        match matches.as_slice() {
+            [] => Err(DocError::TableNotFound {
+                name: name.to_string(),
+            }),
+            [only] => Ok(*only),
+            _ => Err(DocError::DuplicateTablesFound {
+                tables: matches.into_iter().cloned().collect(),
+            }),
+        }
+    }
 }
 
 impl SqlDocBuilder {

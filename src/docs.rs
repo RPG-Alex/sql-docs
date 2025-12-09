@@ -1,5 +1,7 @@
 //! Module for parsing sql and comments and returning `table` and `column`
 //! information, including comments
+use core::fmt;
+
 use sqlparser::ast::{Ident, ObjectName, ObjectNamePart, Spanned, Statement};
 
 use crate::{ast::ParsedSqlFile, comments::Comments, error::DocError};
@@ -32,8 +34,20 @@ impl ColumnDoc {
     /// Getter for the field `doc`
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
-    pub fn doc(&self) -> &Option<String> {
-        &self.doc
+    pub fn doc(&self) -> Option<&str> {
+        self.doc.as_deref()
+    }
+}
+
+impl fmt::Display for ColumnDoc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Column Name: {}", self.name())?;
+        if let Some(c) = self.doc() {
+            writeln!(f, "Column Doc: {c}")?;
+        } else {
+            writeln!(f, "No Column Doc Found")?;
+        }
+        Ok(())
     }
 }
 
@@ -66,6 +80,12 @@ impl TableDoc {
         Self { schema, name, doc, columns }
     }
 
+    /// Getter for the `Schema` of the table (if there is one)
+    #[must_use]
+    pub fn schema(&self) -> Option<&str> {
+        self.schema.as_deref()
+    }
+
     /// Getter for the `name` field
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
@@ -76,8 +96,8 @@ impl TableDoc {
     /// Getter for the `doc` field
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
-    pub fn doc(&self) -> &Option<String> {
-        &self.doc
+    pub fn doc(&self) -> Option<&str> {
+        self.doc.as_deref()
     }
 
     /// Getter for the `columns` field
@@ -85,6 +105,30 @@ impl TableDoc {
     #[allow(clippy::missing_const_for_fn)]
     pub fn columns(&self) -> &[ColumnDoc] {
         &self.columns
+    }
+}
+
+impl fmt::Display for TableDoc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(s) = self.schema() {
+            writeln!(f, "Table Schema: {s}")?;
+        } else {
+            writeln!(f, "No Table Schema")?;
+        }
+
+        writeln!(f, "Table Name: {}", self.name())?;
+
+        if let Some(d) = self.doc() {
+            writeln!(f, "Table Doc: {d}")?;
+        } else {
+            writeln!(f, "No Table Doc")?;
+        }
+
+        writeln!(f, "Table Column Docs: ")?;
+        for col in self.columns() {
+            writeln!(f, " {col}")?;
+        }
+        Ok(())
     }
 }
 

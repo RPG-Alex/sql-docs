@@ -110,7 +110,6 @@ mod tests {
             assert_eq!(parsed_doc.tables()[i].name(), table_names[i]);
             let parsed_doc_table_doc = parsed_doc.tables()[i]
                 .doc()
-                .as_ref()
                 .map_or_else(|| panic!("unable to find SqlFileDoc table doc"), |val| val);
             assert_eq!(parsed_doc_table_doc, table_comments[i]);
         }
@@ -124,7 +123,6 @@ mod tests {
             assert_eq!(column.name(), user_columns[i]);
             let column_doc = column
                 .doc()
-                .as_ref()
                 .map_or_else(|| panic!("unable to find column doc value"), |val| val);
             assert_eq!(column_doc, user_columns_comments[i]);
         }
