@@ -10,57 +10,34 @@ use crate::{
     files::SqlFileSet,
 };
 
+/// Structure for Sql Documentation, built from [`TableDoc`] and 
 pub struct SqlDoc {
-    // e.g. all tables across all files
-    tables: Vec<TableDoc>,           // or a map keyed by (schema, name)
-    // optionally: keep per-file docs too
+    /// Holds the [`Vec`] of all tables found in all specified files.
+    tables: Vec<TableDoc>,
+    /// Holds the [`Vec`] of each file's [`PathBuf`] and the original file's [`SqlFileDoc`]
     files: Vec<(PathBuf, SqlFileDoc)>,
 }
 
+
+/// Builder structure for the [`SqlDoc`]
 pub struct SqlDocBuilder {
-    source: SqlFileDocource,
+    /// The source for implementing the [`SqlDoc`] to be built
+    source: SqlFileDocSource,
+    /// The list of files to be ignored for parsing purposes. 
     deny: Vec<String>,
 }
 
-enum SqlFileDocource {
+/// Enum for specifying a file doc source as a `directory` or a specific `file`
+enum SqlFileDocSource {
     Dir(PathBuf),
     File(PathBuf),
 }
 
 impl SqlDoc {
-    pub fn from_dir<P: AsRef<Path>>(root: P) -> SqlDocBuilder {
-        SqlDocBuilder {
-            source: SqlFileDocource::Dir(root.as_ref().to_path_buf()),
-            deny: Vec::new(),
-        }
-    }
 
-    pub fn from_path<P: AsRef<Path>>(path: P) -> SqlDocBuilder {
-        SqlDocBuilder {
-            source: SqlFileDocource::File(path.as_ref().to_path_buf()),
-            deny: Vec::new(),
-        }
-    }
 
-    // later:
-    // pub fn table(&self, name: &str) -> Result<&TableDoc, DocError> { ... }
-    // pub fn table_with_schema(&self, schema: &str, name: &str) -> Result<&TableDoc, DocError> { ... }
 }
 
 impl SqlDocBuilder {
-    pub fn deny<S: AsRef<str>>(mut self, pattern: S) -> Self {
-        self.deny.push(pattern.as_ref().to_string());
-        self
-    }
 
-    pub fn build(self) -> Result<SqlDoc, DocError> {
-        match self.source {
-            SqlFileDocource::Dir(root) => {
-                // Use your existing directory logic here
-            }
-            SqlFileDocource::File(path) => {
-                // Same plumbing but for a single file
-            }
-        }
-    }
 }
