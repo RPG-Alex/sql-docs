@@ -24,7 +24,7 @@ pub struct SqlDocBuilder {
     source: SqlFileDocSource,
     /// The list of Paths to be ignored for parsing purposes.
     deny: Vec<String>,
-    /// Used to indicate maintaining the [`Vec<(PathBuf, SqlFileDoc`]
+    /// Used to indicate maintaining the `[(PathBuf, SqlFileDoc)]`
     retain_files: bool,
 }
 
