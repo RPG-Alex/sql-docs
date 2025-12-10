@@ -29,8 +29,8 @@ pub enum DocError {
     /// Duplicate tables with same name were found when searching [`crate::SqlDoc`]
     DuplicateTablesFound {
         /// `Vec` of the [`TableDoc`] for each duplicate table found
-        tables: Vec<TableDoc>
-    }
+        tables: Vec<TableDoc>,
+    },
 }
 
 impl fmt::Display for DocError {
@@ -43,16 +43,15 @@ impl fmt::Display for DocError {
             Self::SqlParserError(parser_error) => write!(f, "SQL parse error {parser_error}"),
             Self::InvalidObjectName { message, line, column } => {
                 write!(f, "{message} at line {line}, column {column}")
-            },
-            Self::TableNotFound{name} => write!(f, "Table not found in SqlDoc: {name}"),
+            }
+            Self::TableNotFound { name } => write!(f, "Table not found in SqlDoc: {name}"),
             Self::DuplicateTablesFound { tables } => {
                 writeln!(f, "Duplicate tables found:")?;
                 for t in tables {
-                    writeln!(f, "{t}")?; 
+                    writeln!(f, "{t}")?;
                 }
                 Ok(())
             }
-
         }
     }
 }
@@ -63,7 +62,9 @@ impl error::Error for DocError {
             Self::FileReadError(e) => Some(e),
             Self::CommentError(e) => Some(e),
             Self::SqlParserError(e) => Some(e),
-            Self::InvalidObjectName { .. } | Self::TableNotFound { .. } |  Self::DuplicateTablesFound { .. } => None,
+            Self::InvalidObjectName { .. }
+            | Self::TableNotFound { .. }
+            | Self::DuplicateTablesFound { .. } => None,
         }
     }
 }

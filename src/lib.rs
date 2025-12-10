@@ -121,9 +121,8 @@ mod tests {
             .map_or_else(|| panic!("unable to find first value"), |(_, docs)| docs.tables());
         for (i, column) in first_tables[0].columns().iter().enumerate() {
             assert_eq!(column.name(), user_columns[i]);
-            let column_doc = column
-                .doc()
-                .map_or_else(|| panic!("unable to find column doc value"), |val| val);
+            let column_doc =
+                column.doc().map_or_else(|| panic!("unable to find column doc value"), |val| val);
             assert_eq!(column_doc, user_columns_comments[i]);
         }
         Ok(())
