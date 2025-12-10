@@ -3,7 +3,11 @@
 use std::path::{Path, PathBuf};
 
 use crate::{
-    ast::ParsedSqlFileSet, comments::Comments, docs::{SqlFileDoc, TableDoc}, error::DocError, files::SqlFileSet
+    ast::{ParsedSqlFile, ParsedSqlFileSet},
+    comments::Comments,
+    docs::{SqlFileDoc, TableDoc},
+    error::DocError,
+    files::{SqlFile, SqlFileSet},
 };
 
 /// Structure for Sql Documentation, built from [`TableDoc`] and
@@ -20,6 +24,8 @@ pub struct SqlDocBuilder {
     source: SqlFileDocSource,
     /// The list of Paths to be ignored for parsing purposes.
     deny: Vec<String>,
+    /// Used to indicate maintaining the [`Vec<(PathBuf, SqlFileDoc`]
+    retain_files: bool,
 }
 
 /// Enum for specifying a file doc source as a `directory` or a specific `file`
@@ -29,15 +35,17 @@ enum SqlFileDocSource {
 }
 
 impl SqlDoc {
-    /// Method for creating a new SqlDoc
-    pub fn new(tables: Vec<TableDoc>, files: Option<Vec<(PathBuf, SqlFileDoc)>>) -> Self {
-        SqlDoc { tables, files }
+    /// Method for creating a new [`SqlDoc`]
+    #[must_use]
+    pub const fn new(tables: Vec<TableDoc>, files: Option<Vec<(PathBuf, SqlFileDoc)>>) -> Self {
+        Self { tables, files }
     }
     /// Method for generating builder from a directory.
     pub fn from_dir<P: AsRef<Path>>(root: P) -> SqlDocBuilder {
         SqlDocBuilder {
             source: SqlFileDocSource::Dir(root.as_ref().to_path_buf()),
             deny: Vec::new(),
+            retain_files: false,
         }
     }
     /// Method for generating builder from a [`Path`] of a single file
@@ -45,6 +53,7 @@ impl SqlDoc {
         SqlDocBuilder {
             source: SqlFileDocSource::File(path.as_ref().to_path_buf()),
             deny: Vec::new(),
+            retain_files: false,
         }
     }
 
@@ -94,6 +103,17 @@ impl SqlDoc {
             }),
         }
     }
+
+    /// Getter method for returning the `&[TableDoc]`
+    #[must_use]
+    pub fn tables(&self) -> &[TableDoc] {
+        &self.tables
+    }
+    /// Getter method for returning the `Option<&[(PathBuf,SqlFileDoc)]>`
+    #[must_use]
+    pub fn files(&self) -> Option<&[(PathBuf, SqlFileDoc)]> {
+        self.files.as_deref()
+    }
 }
 
 impl SqlDocBuilder {
@@ -106,15 +126,45 @@ impl SqlDocBuilder {
         self
     }
 
-    pub fn build(&self) -> SqlDoc {
-        
+    /// Setter that ticks on the option to retain the [`Vec<(PathBuf,SqlFileDoc)>`]
+    pub const fn retain_files(mut self) -> Self {
+        self.retain_files = true;
+        self
+    }
 
-        SqlDoc { tables: (), files: () }
+    /// Builds the [`SqlDoc`]
+    ///
+    /// # Errors
+    /// - Will return `DocError` bubbled up
+    pub fn build(self) -> Result<SqlDoc, DocError> {
+        let docs: Vec<(PathBuf, SqlFileDoc)> = match &self.source {
+            SqlFileDocSource::Dir(path) => generate_docs_from_dir(path, &self.deny)?,
+            SqlFileDocSource::File(file) => {
+                let gen_files = generate_docs_from_file(file)?;
+                let (path, sql_doc) = gen_files;
+                vec![(path, sql_doc)]
+            }
+        };
+        let mut tables = Vec::new();
+        if self.retain_files {
+            let files = docs;
+            for (_, sql_doc) in &files {
+                tables.extend(sql_doc.tables().iter().cloned());
+            }
+            Ok(SqlDoc { tables, files: Some(files) })
+        } else {
+            for (_, sql_doc) in &docs {
+                tables.extend(sql_doc.tables().iter().cloned());
+            }
+            Ok(SqlDoc { tables, files: None })
+        }
     }
 }
 
-
-fn generate_docs_from_dir<P: AsRef<Path>, S: AsRef<str>>(source: P, deny: &[S]) -> Result<Vec<(PathBuf, SqlFileDoc)>, DocError> {
+fn generate_docs_from_dir<P: AsRef<Path>, S: AsRef<str>>(
+    source: P,
+    deny: &[S],
+) -> Result<Vec<(PathBuf, SqlFileDoc)>, DocError> {
     let deny_list: Vec<String> = deny.iter().map(|file| file.as_ref().to_string()).collect();
     let deny_option = if deny_list.is_empty() { None } else { Some(deny_list) };
     let file_set = SqlFileSet::new(source.as_ref(), deny_option)?;
@@ -129,6 +179,11 @@ fn generate_docs_from_dir<P: AsRef<Path>, S: AsRef<str>>(source: P, deny: &[S]) 
     Ok(sql_docs)
 }
 
-fn generate_docs_from_file<P: AsRef<Path>, S: AsRef<str>>(source: P, deny: &[S]) -> Result<Vec<(PathBuf, SqlFileDoc)>, DocError> {
-    
+fn generate_docs_from_file<P: AsRef<Path>>(source: P) -> Result<(PathBuf, SqlFileDoc), DocError> {
+    let file = SqlFile::new(source.as_ref())?;
+    let parsed_file = ParsedSqlFile::parse(file)?;
+    let comments = Comments::parse_all_comments_from_file(&parsed_file)?;
+    let docs = SqlFileDoc::from_parsed_file(&parsed_file, &comments)?;
+    let path = parsed_file.file().path().to_path_buf();
+    Ok((path, docs))
 }
