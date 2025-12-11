@@ -86,3 +86,104 @@ impl From<ParserError> for DocError {
         Self::SqlParserError(e)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use sqlparser::parser::ParserError;
+
+    use crate::{
+        error::DocError, comments::CommentError
+    };
+
+    #[test]
+    fn test_doc_errors() {
+        use std::fs;
+
+        use crate::comments::Location;
+        let Err(io_error) = fs::read_dir("INVALID") else {
+            panic!("there should not be a directory called INVALID")
+        };
+        let io_error_str = io_error.to_string();
+        let read_error = DocError::FileReadError(io_error);
+        let expected_read_error = "file read error: ".to_owned() + &io_error_str;
+        assert!(read_error.to_string().contains(&expected_read_error));
+
+        let comment_error = DocError::CommentError(CommentError::UnmatchedMultilineCommentStart {
+            location: Location::default(),
+        });
+        let expected_comment_error =
+            "comment parse error: unmatched block comment start at line 1, column 1";
+        assert_eq!(comment_error.to_string(), expected_comment_error);
+
+        let sql_error = DocError::SqlParserError(ParserError::RecursionLimitExceeded);
+        let expected_sql_error = "SQL parse error sql parser error: recursion limit exceeded";
+        assert_eq!(sql_error.to_string(), expected_sql_error);
+    }
+
+    #[test]
+    fn test_doc_errors_from() {
+        use std::fs;
+
+        use crate::comments::Location;
+        let Err(io_error) = fs::read_dir("INVALID") else {
+            panic!("there should not be a directory called INVALID")
+        };
+        let io_kind = io_error.kind();
+        let doc_io_error = DocError::from(io_error);
+        match doc_io_error {
+            DocError::FileReadError(inner) => assert_eq!(inner.kind(), io_kind),
+            _ => panic!("expected instance of DocError::FileReadError"),
+        }
+
+        let comment_error =
+            CommentError::UnmatchedMultilineCommentStart { location: Location::default() };
+        let comment_error_str = comment_error.to_string();
+        let doc_comment_error: DocError = comment_error.into();
+        match doc_comment_error {
+            DocError::CommentError(inner) => assert_eq!(inner.to_string(), comment_error_str),
+            _ => panic!("expected instance of DocError::CommentError"),
+        }
+
+        let parser_error = ParserError::RecursionLimitExceeded;
+        let parser_error_str = parser_error.to_string();
+        let doc_parser_error: DocError = parser_error.into();
+        match doc_parser_error {
+            DocError::SqlParserError(inner) => assert_eq!(inner.to_string(), parser_error_str),
+            _ => panic!("expected instance of DocError::SqlParserError"),
+        }
+    }
+
+    #[test]
+    fn test_doc_error_source() {
+        use std::{error::Error, fs};
+
+        use crate::comments::Location;
+
+        let Err(io_err) = fs::read_dir("INVALID") else {
+            panic!("there should not be a directory called INVALID")
+        };
+        let io_err_str = io_err.to_string();
+        let doc_io = DocError::FileReadError(io_err);
+        let src = doc_io
+            .source()
+            .map_or_else(|| panic!("expected Some(source) for FileReadError"), |source| source);
+        assert_eq!(src.to_string(), io_err_str);
+
+        let comment =
+            CommentError::UnmatchedMultilineCommentStart { location: Location::default() };
+        let comment_str = comment.to_string();
+        let doc_comment = DocError::CommentError(comment);
+        let src = doc_comment
+            .source()
+            .map_or_else(|| panic!("expected Some(source) for CommentError"), |source| source);
+        assert_eq!(src.to_string(), comment_str);
+
+        let parser = ParserError::RecursionLimitExceeded;
+        let parser_str = parser.to_string();
+        let doc_parser = DocError::SqlParserError(parser);
+        let src = doc_parser
+            .source()
+            .map_or_else(|| panic!("expected Some(source) for SqlParserError"), |source| source);
+        assert_eq!(src.to_string(), parser_str);
+    }
+}

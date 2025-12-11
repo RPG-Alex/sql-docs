@@ -11,6 +11,7 @@ use crate::{
 };
 
 /// Structure for Sql Documentation, built from [`TableDoc`] and
+#[derive(Debug, Eq, PartialEq)]
 pub struct SqlDoc {
     /// Holds the [`Vec`] of all tables found in all specified files.
     tables: Vec<TableDoc>,
@@ -121,12 +122,14 @@ impl SqlDocBuilder {
     ///
     /// # Parameters
     /// - The `path` that will be added to deny path `Vec`
+    #[must_use]
     pub fn deny(mut self, deny_path: &str) -> Self {
         self.deny.push(deny_path.into());
         self
     }
 
     /// Setter that ticks on the option to retain the [`Vec<(PathBuf,SqlFileDoc)>`]
+    #[must_use]
     pub const fn retain_files(mut self) -> Self {
         self.retain_files = true;
         self
@@ -186,4 +189,102 @@ fn generate_docs_from_file<P: AsRef<Path>>(source: P) -> Result<(PathBuf, SqlFil
     let docs = SqlFileDoc::from_parsed_file(&parsed_file, &comments)?;
     let path = parsed_file.file().path().to_path_buf();
     Ok((path, docs))
+}
+
+
+#[cfg(test)]
+mod tests {
+    use std::{env, fs};
+
+    use crate::{SqlDoc, docs::{ColumnDoc, TableDoc}};
+
+    
+    #[test]
+    fn build_sql_doc_from_file() -> Result<(), Box<dyn std::error::Error>>{
+        let base = env::temp_dir().join("build_sql_doc_from_file");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base)?;
+        let file = base.join("test_file.sql");
+        let sample = sample_sql();
+        let (contents, expected) = sample.first().map_or_else(|| panic!("unable to parse hard coded values"), |val| val);
+        fs::write(&file, contents)?;
+        let sql_doc = SqlDoc::from_path(file).build()?;
+        assert_eq!(&sql_doc, expected);
+        Ok(())
+    }
+
+fn sample_sql() -> Vec<(&'static str, SqlDoc)> {
+    vec![
+        (
+            r"
+            -- Users table
+            CREATE TABLE users (
+                -- id
+                id INTEGER PRIMARY KEY,
+                -- login name
+                username TEXT NOT NULL
+            );
+            ",
+            SqlDoc::new(
+                vec![TableDoc::new(
+                    None,
+                    "users".to_string(),
+                    Some("Users table".to_string()),
+                    vec![
+                        ColumnDoc::new("id".to_string(), Some("id".to_string())),
+                        ColumnDoc::new("username".to_string(), Some("login name".to_string())),
+                    ],
+                )],
+                None, 
+            ),
+        ),
+
+        (
+            r"
+            /* Posts table */
+            CREATE TABLE posts (
+                /* primary key */
+                id INTEGER PRIMARY KEY,
+                title TEXT NOT NULL
+            );
+            ",
+            SqlDoc::new(
+                vec![TableDoc::new(
+                    None,
+                    "posts".to_string(),
+                    Some("Posts table".to_string()),
+                    vec![
+                        ColumnDoc::new("id".to_string(), Some("primary key".to_string())),
+                        ColumnDoc::new("title".to_string(), None),
+                    ],
+                )],
+                None,
+            ),
+        ),
+
+        (
+            r"
+            CREATE TABLE things (
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                value INTEGER
+            );
+            ",
+            SqlDoc::new(
+                vec![TableDoc::new(
+                    None,
+                    "things".to_string(),
+                    None,
+                    vec![
+                        ColumnDoc::new("id".to_string(), None),
+                        ColumnDoc::new("name".to_string(), None),
+                        ColumnDoc::new("value".to_string(), None),
+                    ],
+                )],
+                None,
+            ),
+        ),
+    ]
+}
+
 }

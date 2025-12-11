@@ -188,7 +188,7 @@ mod tests {
     #[test]
     fn test_recursive_scan_finds_only_sql_files_recursively()
     -> Result<(), Box<dyn std::error::Error>> {
-        let base = env::temp_dir().join("recursive_scan_test");
+        let base = env::temp_dir().join("recursive_scan_test_sql");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
         let sub = base.join("subdir");
@@ -208,6 +208,30 @@ mod tests {
         assert_eq!(found, expected);
         let _ = fs::remove_dir_all(&base);
         Ok(())
+    }
+
+    #[test]
+    fn test_recursive_dir_scan_errs() -> Result<(), Box<dyn std::error::Error>>{
+        let base = env::temp_dir().join("recursive_scan_test");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base)?;
+        let sub = base.join("subdir");
+        fs::create_dir_all(&sub)?;
+        let file1 = base.join("one.sql");
+        let file2 = sub.join("two.sql");
+        let non_sql1 = base.join("ignore.txt");
+        let non_sql2 = sub.join("README.md");
+        fs::File::create(&file1)?;
+        fs::File::create(&file2)?;
+        fs::File::create(&non_sql1)?;
+        fs::File::create(&non_sql2)?;
+        
+        let bad_path = Path::new("bad_path");
+        let bad_dir_scan = recursive_dir_scan(bad_path);
+        assert!(bad_dir_scan.is_err());
+
+        let _ = fs::remove_dir_all(&base);
+        Ok(()) 
     }
 
     #[test]

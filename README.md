@@ -30,50 +30,39 @@ CREATE TABLE users (
 );
 ```
 A rudimentary implementation can be generated with:
-```rust,no_run
-use sql_docs::generate_docs_from_dir_no_deny;
-use std::path::Path;
+```rust
+use sql_docs::SqlDoc;
+use sql_docs::error::DocError;
+use std::{env, fs, path::Path};
 
-fn main() -> Result<(), sql_docs::DocError> {
-    // Directory containing your .sql files
-    let directory = "sql_dir";
+fn main() -> Result<(), DocError> {
+    // tmp dir and file created for demonstration purposes
+    let base = env::temp_dir().join("tmp_dir");
+    let _ = fs::remove_dir_all(&base);
+    fs::create_dir_all(&base)?;
+    let example = base.join("example.sql");
+    fs::write(&example, r#"/* Table storing user accounts */
+    CREATE TABLE users (
+        /* Primary key for each user */
+        id INTEGER PRIMARY KEY,
+        -- The user's login name
+        username VARCHAR(255) NOT NULL,
+        /* User's email address */
+        email VARCHAR(255) UNIQUE NOT NULL
+    );"#)?;
 
-    // Extract table + column documentation
-    let docs = generate_docs_from_dir_no_deny(directory)?;
-
-    // Format and print each table and table's columns
-    for (path, sql_docs) in docs {
-        println!("File: {}", path.display());
-        for table in sql_docs.tables() {
-            println!("  Table: {}", table.name());
-            if let Some(doc) = table.doc() {
-                println!("    Comment: {}", doc);
-            }
-            println!("    Columns:");
-            for column in table.columns() {
-                println!("      - {}", column.name());
-                if let Some(col_doc) = column.doc() {
-                    println!("          {}", col_doc);
-                }
-            }
-        }
-    }
-
+    // Extract table & column documentation
+    let docs = SqlDoc::from_path(&example).build()?;
+    // Verify that the table name is correct
+    assert_eq!(docs.tables().first().expect("hardcoded value").name(), "users");
+    // Verify extraction of table comment
+    assert_eq!(docs.tables().first().expect("hardcoded value").doc(), Some("Table storing user accounts"));
+    // Verify First Column name and comment
+    assert_eq!(docs.tables().first().expect("hardcoded value").columns().first().expect("hardcoded value").name(), "id");
+    assert_eq!(docs.tables().first().expect("hardcoded value").columns().first().expect("hardcoded value").doc(), Some("Primary key for each user"));
+    let _ = fs::remove_dir_all(&base);
     Ok(())
 }
-```
-Which should output:
-```bash
-File: sql_dir/users.sql
-  Table: users
-    Comment: Table storing user accounts
-    Columns:
-      - id
-          Primary key for each user
-      - username
-          The user's login name
-      - email
-          User's email address
 ```
 ## Use cases
 
