@@ -91,9 +91,7 @@ impl From<ParserError> for DocError {
 mod tests {
     use sqlparser::parser::ParserError;
 
-    use crate::{
-        error::DocError, comments::CommentError
-    };
+    use crate::{comments::CommentError, error::DocError};
 
     #[test]
     fn test_doc_errors() {

@@ -211,7 +211,7 @@ mod tests {
     }
 
     #[test]
-    fn test_recursive_dir_scan_errs() -> Result<(), Box<dyn std::error::Error>>{
+    fn test_recursive_dir_scan_errs() -> Result<(), Box<dyn std::error::Error>> {
         let base = env::temp_dir().join("recursive_scan_test");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -225,13 +225,13 @@ mod tests {
         fs::File::create(&file2)?;
         fs::File::create(&non_sql1)?;
         fs::File::create(&non_sql2)?;
-        
+
         let bad_path = Path::new("bad_path");
         let bad_dir_scan = recursive_dir_scan(bad_path);
         assert!(bad_dir_scan.is_err());
 
         let _ = fs::remove_dir_all(&base);
-        Ok(()) 
+        Ok(())
     }
 
     #[test]

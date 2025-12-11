@@ -110,6 +110,11 @@ impl SqlDoc {
     pub fn tables(&self) -> &[TableDoc] {
         &self.tables
     }
+    /// Method to move tables out of Structure if needed
+    #[must_use]
+    pub fn into_tables(self) -> Vec<TableDoc> {
+        self.tables
+    }
     /// Getter method for returning the `Option<&[(PathBuf,SqlFileDoc)]>`
     #[must_use]
     pub fn files(&self) -> Option<&[(PathBuf, SqlFileDoc)]> {
@@ -191,33 +196,131 @@ fn generate_docs_from_file<P: AsRef<Path>>(source: P) -> Result<(PathBuf, SqlFil
     Ok((path, docs))
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::{env, fs};
+    use std::{env, fs, path::PathBuf};
 
-    use crate::{SqlDoc, docs::{ColumnDoc, TableDoc}};
+    use crate::{
+        SqlDoc,
+        docs::{ColumnDoc, SqlFileDoc, TableDoc},
+        error::DocError,
+    };
 
-    
     #[test]
-    fn build_sql_doc_from_file() -> Result<(), Box<dyn std::error::Error>>{
+    fn build_sql_doc_from_file() -> Result<(), Box<dyn std::error::Error>> {
         let base = env::temp_dir().join("build_sql_doc_from_file");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
         let file = base.join("test_file.sql");
         let sample = sample_sql();
-        let (mut contents, mut expected): (Vec<_>, Vec<_>) = sample.into_iter().map(|(a, b)| (a, b)).unzip();;
+        let (contents, expected): (Vec<_>, Vec<_>) = sample.into_iter().unzip();
         fs::write(&file, contents.join(""))?;
-        let sql_doc = SqlDoc::from_path(file).build()?;
-        todo!("combine the sample sqldocs Table Docs for testing");
-        assert_eq!(&sql_doc, expected);
+        let sql_doc = SqlDoc::from_path(&file).build()?;
+        let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect(), None);
+        assert_eq!(sql_doc, doc);
+        let _ = fs::remove_dir_all(&base);
+        Ok(())
+    }
+    #[test]
+    fn build_sql_doc_from_dir() -> Result<(), Box<dyn std::error::Error>> {
+        let base = env::temp_dir().join("build_sql_doc_from_dir");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base)?;
+        let sample = sample_sql();
+        let (contents, expected): (Vec<_>, Vec<_>) = sample.into_iter().unzip();
+        for (idx, contents) in contents.iter().enumerate() {
+            let path = base.join(format!("test_file{idx}.sql"));
+            fs::write(&path, contents)?;
+        }
+        let sql_doc = SqlDoc::from_dir(&base).build()?;
+        let mut actual: Vec<TableDoc> = sql_doc.into_tables();
+        dbg!(&actual);
+        let mut expected: Vec<TableDoc> =
+            expected.into_iter().flat_map(SqlDoc::into_tables).collect();
+        assert_eq!(actual.len(), expected.len());
+        sort_tables(&mut actual);
+        sort_tables(&mut expected);
+        assert_eq!(actual, expected);
+        let _ = fs::remove_dir_all(&base);
         Ok(())
     }
 
-fn sample_sql() -> Vec<(&'static str, SqlDoc)> {
-    vec![
-        (
-            r"
+    #[test]
+    fn test_retrieve_table_and_schema() -> Result<(), Box<dyn std::error::Error>> {
+        let base = env::temp_dir().join("build_sql_doc_with_schema");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base)?;
+        let file = base.join("test_file.sql");
+        let sample = sample_sql();
+        let (contents, expected): (Vec<_>, Vec<_>) = sample.into_iter().unzip();
+        fs::write(&file, contents.join(""))?;
+        let sql_doc = SqlDoc::from_path(&file).build()?;
+        let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect(), None);
+        assert_eq!(sql_doc, doc);
+        let table = "users";
+        let actual_table = sql_doc.table(table)?;
+        let expected_table = doc.table(table)?;
+        assert_eq!(actual_table, expected_table);
+        let schema = "analytics";
+        let schema_table = "events";
+        let actual_schema = sql_doc.table_with_schema(schema, schema_table)?;
+        let expected_schema = doc.table_with_schema(schema, schema_table)?;
+        assert_eq!(actual_schema, expected_schema);
+        let _ = fs::remove_dir_all(&base);
+        Ok(())
+    }
+
+    #[test]
+    fn test_table_err() {
+        let empty_set = SqlDoc::new(vec![], None);
+        let empty_table_err = empty_set.table("name");
+        assert!(empty_table_err.is_err());
+        assert!(matches!(
+            empty_table_err,
+            Err(DocError::TableNotFound { name }) if name == "name"
+        ));
+        let duplicate_set = SqlDoc::new(
+            vec![
+                TableDoc::new(None, "duplicate".to_string(), None, vec![]),
+                TableDoc::new(None, "duplicate".to_string(), None, vec![]),
+            ],
+            None,
+        );
+        let duplicate_tables_err = duplicate_set.table("duplicate");
+        assert!(matches!(duplicate_tables_err, Err(DocError::DuplicateTablesFound { .. })));
+    }
+
+    #[test]
+    fn test_schema_err() {
+        let empty_set = SqlDoc::new(vec![], None);
+        let empty_table_err = empty_set.table_with_schema("schema", "name");
+        assert!(empty_table_err.is_err());
+        assert!(matches!(
+            empty_table_err,
+            Err(DocError::TableNotFound { name }) if name == "name"
+        ));
+        let duplicate_set = SqlDoc::new(
+            vec![
+                TableDoc::new(Some("schema".to_string()), "duplicate".to_string(), None, vec![]),
+                TableDoc::new(Some("schema".to_string()), "duplicate".to_string(), None, vec![]),
+            ],
+            None,
+        );
+        let duplicate_tables_err = duplicate_set.table_with_schema("schema", "duplicate");
+        assert!(matches!(duplicate_tables_err, Err(DocError::DuplicateTablesFound { .. })));
+    }
+    fn sort_tables(tables: &mut [TableDoc]) {
+        tables.sort_by(|a, b| {
+            let a_key = (a.schema().unwrap_or(""), a.name());
+            let b_key = (b.schema().unwrap_or(""), b.name());
+            a_key.cmp(&b_key)
+        });
+    }
+
+    fn sample_sql() -> Vec<(&'static str, SqlDoc)> {
+        vec![
+            (
+                r"
             -- Users table
             CREATE TABLE users (
                 -- id
@@ -226,22 +329,21 @@ fn sample_sql() -> Vec<(&'static str, SqlDoc)> {
                 username TEXT NOT NULL
             );
             ",
-            SqlDoc::new(
-                vec![TableDoc::new(
+                SqlDoc::new(
+                    vec![TableDoc::new(
+                        None,
+                        "users".to_string(),
+                        Some("Users table".to_string()),
+                        vec![
+                            ColumnDoc::new("id".to_string(), Some("id".to_string())),
+                            ColumnDoc::new("username".to_string(), Some("login name".to_string())),
+                        ],
+                    )],
                     None,
-                    "users".to_string(),
-                    Some("Users table".to_string()),
-                    vec![
-                        ColumnDoc::new("id".to_string(), Some("id".to_string())),
-                        ColumnDoc::new("username".to_string(), Some("login name".to_string())),
-                    ],
-                )],
-                None, 
+                ),
             ),
-        ),
-
-        (
-            r"
+            (
+                r"
             /* Posts table */
             CREATE TABLE posts (
                 /* primary key */
@@ -249,43 +351,88 @@ fn sample_sql() -> Vec<(&'static str, SqlDoc)> {
                 title TEXT NOT NULL
             );
             ",
-            SqlDoc::new(
-                vec![TableDoc::new(
+                SqlDoc::new(
+                    vec![TableDoc::new(
+                        None,
+                        "posts".to_string(),
+                        Some("Posts table".to_string()),
+                        vec![
+                            ColumnDoc::new("id".to_string(), Some("primary key".to_string())),
+                            ColumnDoc::new("title".to_string(), None),
+                        ],
+                    )],
                     None,
-                    "posts".to_string(),
-                    Some("Posts table".to_string()),
-                    vec![
-                        ColumnDoc::new("id".to_string(), Some("primary key".to_string())),
-                        ColumnDoc::new("title".to_string(), None),
-                    ],
-                )],
-                None,
+                ),
             ),
-        ),
-
-        (
-            r"
+            (
+                r"
             CREATE TABLE things (
                 id INTEGER PRIMARY KEY,
                 name TEXT,
                 value INTEGER
             );
             ",
-            SqlDoc::new(
-                vec![TableDoc::new(
+                SqlDoc::new(
+                    vec![TableDoc::new(
+                        None,
+                        "things".to_string(),
+                        None,
+                        vec![
+                            ColumnDoc::new("id".to_string(), None),
+                            ColumnDoc::new("name".to_string(), None),
+                            ColumnDoc::new("value".to_string(), None),
+                        ],
+                    )],
                     None,
-                    "things".to_string(),
-                    None,
-                    vec![
-                        ColumnDoc::new("id".to_string(), None),
-                        ColumnDoc::new("name".to_string(), None),
-                        ColumnDoc::new("value".to_string(), None),
-                    ],
-                )],
-                None,
+                ),
             ),
-        ),
-    ]
-}
+            (
+                r"
+            -- Table with schema
+            CREATE TABLE analytics.events (
+                /* event id */
+                id INTEGER PRIMARY KEY,
+                /* event payload */
+                payload TEXT
+            );
+            ",
+                SqlDoc::new(
+                    vec![TableDoc::new(
+                        Some("analytics".to_string()),
+                        "events".to_string(),
+                        Some("Table with schema".to_string()),
+                        vec![
+                            ColumnDoc::new("id".to_string(), Some("event id".to_string())),
+                            ColumnDoc::new(
+                                "payload".to_string(),
+                                Some("event payload".to_string()),
+                            ),
+                        ],
+                    )],
+                    None,
+                ),
+            ),
+        ]
+    }
 
+    #[test]
+    fn test_sql_doc_getters() {
+        let tables = vec![TableDoc::new(None, "name".to_string(), None, vec![])];
+        let files = vec![(
+            PathBuf::from("file.sql"),
+            SqlFileDoc::new(vec![TableDoc::new(None, "name".to_string(), None, vec![])]),
+        )];
+        let sql_doc = SqlDoc::new(
+            vec![TableDoc::new(None, "name".to_string(), None, vec![])],
+            Some(vec![(
+                PathBuf::from("file.sql"),
+                SqlFileDoc::new(vec![TableDoc::new(None, "name".to_string(), None, vec![])]),
+            )]),
+        );
+        assert_eq!(sql_doc.tables().len(), 1);
+        assert_eq!(sql_doc.tables(), tables);
+
+        assert_eq!(sql_doc.files().iter().len(), 1);
+        assert_eq!(sql_doc.files(), Some(files).as_deref());
+    }
 }
