@@ -437,7 +437,7 @@ mod tests {
                 .path()
                 .file_name()
                 .and_then(|s| s.to_str())
-                .map_or_else(|| panic!("test file name should be valid UTF-8"), |val| val);
+                .unwrap_or_else(|| panic!("test file name should be valid UTF-8"));
 
             match filename {
                 "with_single_line_comments.sql" => {

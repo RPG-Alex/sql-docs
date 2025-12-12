@@ -259,12 +259,10 @@ mod tests {
         let tables = vec![table_doc];
         let sql_doc = SqlFileDoc::new(tables);
         let sql_doc_val =
-            sql_doc.tables().first().map_or_else(|| panic!("unable to find tables"), |val| val);
+            sql_doc.tables().first().unwrap_or_else(|| panic!("unable to find table"));
         assert_eq!(sql_doc_val.name(), "user");
-        let sql_doc_val_column = sql_doc_val
-            .columns()
-            .first()
-            .map_or_else(|| panic!("unable to find columns"), |val| val);
+        let sql_doc_val_column =
+            sql_doc_val.columns().first().unwrap_or_else(|| panic!("unable to find columns"));
         assert_eq!(sql_doc_val_column.name(), "id");
     }
 
@@ -285,7 +283,7 @@ mod tests {
                 .path()
                 .file_name()
                 .and_then(|s| s.to_str())
-                .map_or_else(|| panic!("unable to find file name"), |val| val);
+                .unwrap_or_else(|| panic!("unable to find file name"));
 
             match filename {
                 "with_single_line_comments.sql" | "with_mixed_comments.sql" => {
@@ -422,5 +420,12 @@ mod tests {
         docs.push(second_docs);
 
         docs
+    }
+
+    #[test]
+    fn test_doc() {
+        let col_doc = ColumnDoc::new("test".to_string(), Some("comment".to_string()));
+        assert_eq!(col_doc.doc(), Some("comment"));
+        assert_eq!(col_doc.name(), "test");
     }
 }

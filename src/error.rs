@@ -91,7 +91,7 @@ impl From<ParserError> for DocError {
 mod tests {
     use sqlparser::parser::ParserError;
 
-    use crate::{comments::CommentError, error::DocError};
+    use crate::{comments::CommentError, docs::TableDoc, error::DocError};
 
     #[test]
     fn test_doc_errors() {
@@ -120,9 +120,8 @@ mod tests {
 
     #[test]
     fn test_doc_errors_from() {
-        use std::fs;
-
         use crate::comments::Location;
+        use std::fs;
         let Err(io_error) = fs::read_dir("INVALID") else {
             panic!("there should not be a directory called INVALID")
         };
@@ -162,9 +161,8 @@ mod tests {
         };
         let io_err_str = io_err.to_string();
         let doc_io = DocError::FileReadError(io_err);
-        let src = doc_io
-            .source()
-            .map_or_else(|| panic!("expected Some(source) for FileReadError"), |source| source);
+        let src =
+            doc_io.source().unwrap_or_else(|| panic!("expected Some(source) for FileReadError"));
         assert_eq!(src.to_string(), io_err_str);
 
         let comment =
@@ -173,7 +171,7 @@ mod tests {
         let doc_comment = DocError::CommentError(comment);
         let src = doc_comment
             .source()
-            .map_or_else(|| panic!("expected Some(source) for CommentError"), |source| source);
+            .unwrap_or_else(|| panic!("expected Some(source) for CommentError"));
         assert_eq!(src.to_string(), comment_str);
 
         let parser = ParserError::RecursionLimitExceeded;
@@ -181,7 +179,44 @@ mod tests {
         let doc_parser = DocError::SqlParserError(parser);
         let src = doc_parser
             .source()
-            .map_or_else(|| panic!("expected Some(source) for SqlParserError"), |source| source);
+            .unwrap_or_else(|| panic!("expected Some(source) for SqlParserError"));
         assert_eq!(src.to_string(), parser_str);
+    }
+
+    fn table_doc_for_test(name: &str) -> TableDoc {
+        TableDoc::new(None, name.to_string(), None, vec![])
+    }
+    #[test]
+    fn test_doc_error_display_invalid_object_name() {
+        let e =
+            DocError::InvalidObjectName { message: "bad object".to_string(), line: 12, column: 34 };
+        assert_eq!(e.to_string(), "bad object at line 12, column 34");
+    }
+
+    #[test]
+    fn test_doc_error_display_table_not_found() {
+        let e = DocError::TableNotFound { name: "users".to_string() };
+        assert_eq!(e.to_string(), "Table not found in SqlDoc: users");
+    }
+
+    #[test]
+    fn test_doc_error_display_duplicate_tables_found() {
+        let t1 = table_doc_for_test("dup_table");
+        let t2 = table_doc_for_test("dup_table");
+        let e = DocError::DuplicateTablesFound { tables: vec![t1, t2] };
+        let s = e.to_string();
+        assert!(s.contains("Duplicate tables found:"));
+        assert!(s.contains("dup_table"), "output was: {s}");
+    }
+
+    #[test]
+    fn test_doc_error_source_none_for_non_wrapped_variants() {
+        use std::error::Error as _;
+        let invalid = DocError::InvalidObjectName { message: "x".to_string(), line: 1, column: 1 };
+        assert!(invalid.source().is_none());
+        let not_found = DocError::TableNotFound { name: "x".to_string() };
+        assert!(not_found.source().is_none());
+        let dup = DocError::DuplicateTablesFound { tables: vec![] };
+        assert!(dup.source().is_none());
     }
 }
