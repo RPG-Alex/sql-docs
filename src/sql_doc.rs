@@ -20,6 +20,7 @@ pub struct SqlDoc {
 }
 
 /// Builder structure for the [`SqlDoc`]
+#[derive(Debug, Eq, PartialEq)]
 pub struct SqlDocBuilder {
     /// The source for implementing the [`SqlDoc`] to be built
     source: SqlFileDocSource,
@@ -30,6 +31,7 @@ pub struct SqlDocBuilder {
 }
 
 /// Enum for specifying a file doc source as a `directory` or a specific `file`
+#[derive(Debug, Eq, PartialEq)]
 enum SqlFileDocSource {
     Dir(PathBuf),
     File(PathBuf),
@@ -198,12 +200,12 @@ fn generate_docs_from_file<P: AsRef<Path>>(source: P) -> Result<(PathBuf, SqlFil
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs, path::PathBuf};
+    use std::{env, fs, path::PathBuf, vec};
 
     use crate::{
         SqlDoc,
         docs::{ColumnDoc, SqlFileDoc, TableDoc},
-        error::DocError,
+        error::DocError, sql_doc::SqlDocBuilder,
     };
 
     #[test]
@@ -434,5 +436,34 @@ mod tests {
 
         assert_eq!(sql_doc.files().iter().len(), 1);
         assert_eq!(sql_doc.files(), Some(files).as_deref());
+    }
+
+    #[test]
+    fn test_sql_builder_deny_from_path() {
+        let actual_builder = SqlDoc::from_path("path").deny("path1").deny("path2").retain_files();
+        let expected_builder = SqlDocBuilder{
+            source: crate::sql_doc::SqlFileDocSource::File(PathBuf::from("path")),
+            deny: vec!["path1".to_string(), "path2".to_string()],
+            retain_files: true
+            };
+        assert_eq!(actual_builder, expected_builder);
+    }
+    #[test]
+    fn test_sql_builder_to_sql_doc() -> Result<(), Box<dyn std::error::Error>> {
+        let base = env::temp_dir().join("sql_builder_to_sql_doc");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base)?;
+        let file = base.join("test_file.sql");
+        let sample = sample_sql();
+        let (contents, expected): (Vec<_>, Vec<_>) = sample.into_iter().unzip();
+        fs::write(&file, contents.join(""))?;
+        let sql_doc = SqlDoc::from_path(&file).build()?;
+        let sql_doc_deny = SqlDoc::from_dir(&base).deny(file.to_str().map_or_else(|| panic!("could not find path"), |val| val)).retain_files().build()?;
+        let doc_deny = SqlDoc::new(vec![], Some(vec![]));
+        let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect(), None);
+        assert_eq!(sql_doc, doc);
+        assert_eq!(sql_doc_deny, doc_deny);
+        let _ = fs::remove_dir_all(&base);
+        Ok(())
     }
 }
