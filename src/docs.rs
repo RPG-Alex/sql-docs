@@ -126,7 +126,7 @@ impl fmt::Display for TableDoc {
 
         writeln!(f, "Table Column Docs: ")?;
         for col in self.columns() {
-            writeln!(f, " {col}")?;
+            write!(f, " {col}")?;
         }
         Ok(())
     }
@@ -244,7 +244,17 @@ fn schema_and_table(name: &ObjectName) -> Result<(Option<String>, String), DocEr
 
 #[cfg(test)]
 mod tests {
-    use crate::docs::{ColumnDoc, SqlFileDoc, TableDoc};
+    use core::fmt;
+
+    use sqlparser::{
+        ast::{Ident, ObjectName, ObjectNamePart, ObjectNamePartFunction},
+        tokenizer::Span,
+    };
+
+    use crate::{
+        docs::{ColumnDoc, SqlFileDoc, TableDoc, schema_and_table},
+        error::DocError,
+    };
 
     #[test]
     fn test_sql_docs_struct() {
@@ -425,7 +435,153 @@ mod tests {
     #[test]
     fn test_doc() {
         let col_doc = ColumnDoc::new("test".to_string(), Some("comment".to_string()));
+        assert_eq!(&col_doc.to_string(), &"Column Name: test\nColumn Doc: comment\n".to_string());
+        let col_doc_no_doc = ColumnDoc::new("test".to_string(), None);
+        assert_eq!(
+            &col_doc_no_doc.to_string(),
+            &"Column Name: test\nNo Column Doc Found\n".to_string()
+        );
         assert_eq!(col_doc.doc(), Some("comment"));
         assert_eq!(col_doc.name(), "test");
+        assert_eq!(col_doc_no_doc.doc(), None);
+        assert_eq!(col_doc_no_doc.name(), "test");
+        let table_doc = TableDoc::new(
+            Some("schema".to_string()),
+            "table".to_string(),
+            Some("table doc".to_string()),
+            vec![col_doc],
+        );
+        let table_doc_no_doc = TableDoc::new(None, "table".to_string(), None, vec![col_doc_no_doc]);
+        assert_eq!(table_doc.name(), "table");
+        assert_eq!(table_doc.schema(), Some("schema"));
+        assert_eq!(
+            table_doc.to_string(),
+            "Table Schema: schema\nTable Name: table\nTable Doc: table doc\nTable Column Docs: \n Column Name: test\nColumn Doc: comment\n"
+        );
+        assert_eq!(table_doc_no_doc.schema(), None);
+        assert_eq!(table_doc_no_doc.name(), "table");
+        assert_eq!(
+            table_doc_no_doc.to_string(),
+            "No Table Schema\nTable Name: table\nNo Table Doc\nTable Column Docs: \n Column Name: test\nNo Column Doc Found\n"
+        );
+    }
+
+    fn ident(v: &str) -> Ident {
+        Ident { value: v.to_string(), quote_style: None, span: Span::empty() }
+    }
+
+    fn func_part(name: &str) -> ObjectNamePart {
+        ObjectNamePart::Function(ObjectNamePartFunction { name: ident(name), args: vec![] })
+    }
+
+    #[test]
+    fn schema_and_table_errors_when_no_identifier_parts() {
+        let name = ObjectName(vec![func_part("now")]);
+
+        let err = match schema_and_table(&name) {
+            Ok(v) => panic!("expected Err(DocError::InvalidObjectName), got Ok({v:?})"),
+            Err(e) => e,
+        };
+
+        match err {
+            DocError::InvalidObjectName { message, .. } => {
+                assert_eq!(message, "ObjectName had no identifier parts");
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn schema_and_table_single_identifier() {
+        let name = ObjectName(vec![ObjectNamePart::Identifier(ident("users"))]);
+
+        let (schema, table) = match schema_and_table(&name) {
+            Ok(v) => v,
+            Err(e) => panic!("unexpected error: {e:?}"),
+        };
+
+        assert_eq!(schema, None);
+        assert_eq!(table, "users");
+    }
+
+    #[test]
+    fn schema_and_table_schema_and_table_with_function_ignored()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let name = ObjectName(vec![
+            ObjectNamePart::Identifier(ident("catalog")),
+            ObjectNamePart::Identifier(ident("public")),
+            func_part("some_func"),
+            ObjectNamePart::Identifier(ident("orders")),
+        ]);
+
+        let (schema, table) = schema_and_table(&name)?;
+        assert_eq!(schema, Some("public".to_string()));
+        assert_eq!(table, "orders");
+        Ok(())
+    }
+
+    struct FailOnNthWrite {
+        fail_at: usize,
+        writes: usize,
+        sink: String,
+    }
+
+    impl FailOnNthWrite {
+        fn new(fail_at: usize) -> Self {
+            Self { fail_at, writes: 0, sink: String::new() }
+        }
+    }
+
+    impl fmt::Write for FailOnNthWrite {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            self.writes += 1;
+            if self.writes == self.fail_at {
+                return Err(fmt::Error);
+            }
+            self.sink.push_str(s);
+            Ok(())
+        }
+    }
+
+    fn run_fail_at<T: fmt::Display>(v: &T, fail_at: usize) -> Result<(), fmt::Error> {
+        let mut w = FailOnNthWrite::new(fail_at);
+        fmt::write(&mut w, format_args!("{v}"))
+    }
+
+    fn count_writes<T: fmt::Display>(v: &T) -> usize {
+        let mut w = FailOnNthWrite { fail_at: usize::MAX, writes: 0, sink: String::new() };
+        // We don't care if this errors (it shouldn't with fail_at=MAX), we only want the write count.
+        let _ = fmt::write(&mut w, format_args!("{v}"));
+        w.writes
+    }
+
+    #[test]
+    fn display_propagates_every_question_mark_path_for_column_and_table() {
+        let col_with_doc = ColumnDoc::new("col_a".into(), Some("doc".into()));
+        let col_without_doc = ColumnDoc::new("col_b".into(), None);
+
+        let table = TableDoc::new(
+            Some("public".into()),
+            "users".into(),
+            Some("table doc".into()),
+            vec![col_with_doc.clone(), col_without_doc],
+        );
+
+        let col_writes = count_writes(&col_with_doc);
+        let table_writes = count_writes(&table);
+
+        for i in 1..=col_writes {
+            assert!(
+                run_fail_at(&col_with_doc, i).is_err(),
+                "ColumnDoc should error when failing at write #{i} (total writes {col_writes})"
+            );
+        }
+
+        for i in 1..=table_writes {
+            assert!(
+                run_fail_at(&table, i).is_err(),
+                "TableDoc should error when failing at write #{i} (total writes {table_writes})"
+            );
+        }
     }
 }
