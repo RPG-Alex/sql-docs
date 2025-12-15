@@ -680,13 +680,15 @@ mod tests {
 
         fs::write(&file, sql)?;
 
-        let built = SqlDoc::from_path(&file).flatten_multiline_with(" • ").build()?;
+        let built1 = SqlDoc::from_path(&file).flatten_multiline_with(" • ").build()?;
+        let built2 = SqlDoc::from_path(&file).flatten_multiline().build()?;
+        let t1 = &built1.tables()[0];
+        let t2 = &built2.tables()[0];
+        assert_eq!(t1.doc(), Some("Table Doc line1 • line2"));
+        assert_eq!(t1.columns()[0].doc(), Some("col1 • doc"));
 
-        let t = &built.tables()[0];
-
-        assert_eq!(t.doc(), Some("Table Doc line1 • line2"));
-        assert_eq!(t.columns()[0].doc(), Some("col1 • doc"));
-
+        assert_eq!(t2.doc(), Some("Table Doc line1line2"));
+        assert_eq!(t2.columns()[0].doc(), Some("col1doc"));
         let _ = fs::remove_dir_all(&base);
         Ok(())
     }
