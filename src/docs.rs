@@ -37,6 +37,11 @@ impl ColumnDoc {
     pub fn doc(&self) -> Option<&str> {
         self.doc.as_deref()
     }
+
+    /// Setter to update the table doc
+    pub fn set_doc(&mut self, doc: impl Into<String>) {
+        self.doc = Some(doc.into());
+    }
 }
 
 impl fmt::Display for ColumnDoc {
@@ -100,11 +105,21 @@ impl TableDoc {
         self.doc.as_deref()
     }
 
+    /// Setter to update the table doc
+    pub fn set_doc(&mut self, doc: impl Into<String>) {
+        self.doc = Some(doc.into());
+    }
+
     /// Getter for the `columns` field
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn columns(&self) -> &[ColumnDoc] {
         &self.columns
+    }
+
+    /// Getter that returns a mutable reference to the [`ColumnDoc`] vec
+    pub fn columns_mut(&mut self) -> &mut [ColumnDoc] {
+        &mut self.columns
     }
 }
 
@@ -550,7 +565,6 @@ mod tests {
 
     fn count_writes<T: fmt::Display>(v: &T) -> usize {
         let mut w = FailOnNthWrite { fail_at: usize::MAX, writes: 0, sink: String::new() };
-        // We don't care if this errors (it shouldn't with fail_at=MAX), we only want the write count.
         let _ = fmt::write(&mut w, format_args!("{v}"));
         w.writes
     }
@@ -583,5 +597,55 @@ mod tests {
                 "TableDoc should error when failing at write #{i} (total writes {table_writes})"
             );
         }
+    }
+
+    #[test]
+    fn column_doc_set_doc_updates_doc() {
+        let mut col = ColumnDoc::new("id".to_string(), None);
+        assert_eq!(col.name(), "id");
+        assert_eq!(col.doc(), None);
+        col.set_doc("primary key");
+        assert_eq!(col.doc(), Some("primary key"));
+        let new_doc = String::from("primary key for users table");
+        col.set_doc(new_doc);
+        assert_eq!(col.doc(), Some("primary key for users table"));
+    }
+
+    #[test]
+    fn table_doc_set_doc_updates_doc() {
+        let mut table = TableDoc::new(None, "users".to_string(), None, Vec::new());
+        assert_eq!(table.name(), "users");
+        assert_eq!(table.schema(), None);
+        assert_eq!(table.doc(), None);
+        table.set_doc("users table docs");
+        assert_eq!(table.doc(), Some("users table docs"));
+        table.set_doc(String::from("updated users table docs"));
+        assert_eq!(table.doc(), Some("updated users table docs"));
+    }
+
+    #[test]
+    fn columns_mut_allows_mutating_column_docs() {
+        let mut table = TableDoc::new(
+            None,
+            "users".to_string(),
+            None,
+            vec![
+                ColumnDoc::new("id".to_string(), None),
+                ColumnDoc::new("username".to_string(), None),
+            ],
+        );
+
+        {
+            let cols_mut = table.columns_mut();
+            assert_eq!(cols_mut.len(), 2);
+            cols_mut[0].set_doc("primary key");
+            cols_mut[1].set_doc("login name");
+        }
+
+        let cols = table.columns();
+        assert_eq!(cols[0].name(), "id");
+        assert_eq!(cols[0].doc(), Some("primary key"));
+        assert_eq!(cols[1].name(), "username");
+        assert_eq!(cols[1].doc(), Some("login name"));
     }
 }
