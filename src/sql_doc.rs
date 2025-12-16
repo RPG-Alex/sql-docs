@@ -21,9 +21,9 @@ pub struct SqlDoc {
 
 /// Builder structure for the [`SqlDoc`]
 #[derive(Debug, Eq, PartialEq)]
-pub struct SqlDocBuilder {
+pub struct SqlDocBuilder<'a> {
     /// The source for implementing the [`SqlDoc`] to be built
-    source: SqlFileDocSource,
+    source: SqlFileDocSource<'a>,
     /// The list of Paths to be ignored for parsing purposes.
     deny: Vec<String>,
     /// Used to indicate maintaining the `[(PathBuf, SqlFileDoc)]`
@@ -45,9 +45,10 @@ pub enum MultiFlatten {
 
 /// Enum for specifying a file doc source as a `directory` or a specific `file`
 #[derive(Debug, Eq, PartialEq)]
-enum SqlFileDocSource {
+enum SqlFileDocSource<'a>{
     Dir(PathBuf),
     File(PathBuf),
+    FromString(&'a str),
 }
 
 impl SqlDoc {
@@ -57,7 +58,7 @@ impl SqlDoc {
         Self { tables, files }
     }
     /// Method for generating builder from a directory.
-    pub fn from_dir<P: AsRef<Path>>(root: P) -> SqlDocBuilder {
+    pub fn from_dir<P: AsRef<Path> + ?Sized>(root: &P) -> SqlDocBuilder<'_> {
         SqlDocBuilder {
             source: SqlFileDocSource::Dir(root.as_ref().to_path_buf()),
             deny: Vec::new(),
@@ -66,7 +67,7 @@ impl SqlDoc {
         }
     }
     /// Method for generating builder from a [`Path`] of a single file
-    pub fn from_path<P: AsRef<Path>>(path: P) -> SqlDocBuilder {
+    pub fn from_path<P: AsRef<Path> + ?Sized>(path: &P) -> SqlDocBuilder<'_> {
         SqlDocBuilder {
             source: SqlFileDocSource::File(path.as_ref().to_path_buf()),
             deny: Vec::new(),
@@ -144,7 +145,7 @@ impl SqlDoc {
     }
 }
 
-impl SqlDocBuilder {
+impl SqlDocBuilder<'_> {
     /// Method for adding an item to the deny list
     ///
     /// # Parameters
@@ -181,7 +182,6 @@ impl SqlDocBuilder {
         self.multiline_flat = MultiFlatten::NoFlat;
         self
     }
-
     /// Builds the [`SqlDoc`]
     ///
     /// # Errors
@@ -193,18 +193,20 @@ impl SqlDocBuilder {
                 let gen_files = generate_docs_from_file(file)?;
                 let (path, sql_doc) = gen_files;
                 vec![(path, sql_doc)]
-            }
+            },
+            SqlFileDocSource::FromString(content) => {todo!()} 
         };
-        let mut tables = Vec::new();
+        let num_of_tables = docs.iter().map(|(_,s)| s.number_of_tables()).sum();
+        let mut tables = Vec::with_capacity(num_of_tables);
         let mut sql_doc = if self.retain_files {
             let files = docs;
             for (_, sql_doc) in &files {
-                tables.extend(sql_doc.tables().iter().cloned());
+                tables.extend(sql_doc.clone());
             }
             SqlDoc { tables, files: Some(files) }
         } else {
-            for (_, sql_doc) in &docs {
-                tables.extend(sql_doc.tables().iter().cloned());
+            for (_, sql_doc) in docs {
+                tables.extend(sql_doc);
             }
             SqlDoc { tables, files: None }
         };

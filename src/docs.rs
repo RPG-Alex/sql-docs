@@ -1,6 +1,7 @@
 //! Module for parsing sql and comments and returning `table` and `column`
 //! information, including comments
 use core::fmt;
+use std::path::PathBuf;
 
 use sqlparser::ast::{Ident, ObjectName, ObjectNamePart, Spanned, Statement};
 
@@ -65,6 +66,7 @@ pub struct TableDoc {
     name: String,
     doc: Option<String>,
     columns: Vec<ColumnDoc>,
+    file: Option<PathBuf>,
 }
 
 impl TableDoc {
@@ -222,6 +224,25 @@ impl SqlFileDoc {
     #[must_use]
     pub fn tables(&self) -> &[TableDoc] {
         &self.tables
+    }
+    /// Returns the number fo tables in the `SqlFileDoc`
+    #[must_use]
+    pub fn number_of_tables(&self) -> usize {
+        self.tables().len()
+    }
+}
+
+impl From<SqlFileDoc> for Vec<TableDoc> {
+    fn from(value: SqlFileDoc) -> Self {
+        value.tables
+    }
+}
+
+impl IntoIterator for SqlFileDoc {
+    type Item = TableDoc;
+    type IntoIter = <Vec<TableDoc> as IntoIterator>::IntoIter;
+    fn into_iter(self) -> Self::IntoIter {
+        self.tables.into_iter()
     }
 }
 
