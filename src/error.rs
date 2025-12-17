@@ -184,7 +184,7 @@ mod tests {
     }
 
     fn table_doc_for_test(name: &str) -> TableDoc {
-        TableDoc::new(None, name.to_string(), None, vec![])
+        TableDoc::new(None, name.to_string(), None, vec![], None)
     }
     #[test]
     fn test_doc_error_display_invalid_object_name() {

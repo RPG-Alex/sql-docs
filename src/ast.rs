@@ -1,6 +1,6 @@
 //! Module for parsing the SQL and then using the resulting AST that will later
 //! be used in `comments` module
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use sqlparser::{
     ast::Statement,
@@ -44,6 +44,12 @@ impl ParsedSqlFile {
     #[must_use]
     pub fn path(&self) -> &Path {
         self.file.path()
+    }
+
+    /// Getter that returns an [`PathBuf`] for the path rather than `&Path`
+    #[must_use]
+    pub fn path_into_path_buf(&self) -> PathBuf {
+        self.file.path_into_path_buf()
     }
 
     /// Getter for the file's content

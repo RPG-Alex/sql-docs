@@ -77,6 +77,12 @@ impl SqlFilesList {
     }
 }
 
+impl From<SqlFilesList> for Vec<PathBuf> {
+    fn from(value: SqlFilesList) -> Self {
+        value.sql_files
+    }
+}
+
 /// Recursively scans the directory for `.sql` files.
 ///
 /// This function:
@@ -124,6 +130,11 @@ impl SqlFile {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
+    }
+    /// Returns the [`PathBuf`] for the current path
+    #[must_use]
+    pub fn path_into_path_buf(&self) -> PathBuf {
+        self.path.clone()
     }
 
     /// Returns the raw SQL text contained in this file.

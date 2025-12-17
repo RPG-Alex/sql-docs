@@ -83,8 +83,9 @@ impl TableDoc {
         name: String,
         doc: Option<String>,
         columns: Vec<ColumnDoc>,
+        file: Option<PathBuf>,
     ) -> Self {
-        Self { schema, name, doc, columns }
+        Self { schema, name, doc, columns, file }
     }
 
     /// Getter for the `Schema` of the table (if there is one)
@@ -207,8 +208,15 @@ impl SqlFileDoc {
                             name,
                             Some(comment.text().to_string()),
                             column_docs,
+                            Some(file.path_into_path_buf()),
                         ),
-                        None => TableDoc::new(schema, name, None, column_docs),
+                        None => TableDoc::new(
+                            schema,
+                            name,
+                            None,
+                            column_docs,
+                            Some(file.path_into_path_buf()),
+                        ),
                     };
                     tables.push(table_doc);
                 }
@@ -301,6 +309,7 @@ mod tests {
             "user".to_string(),
             Some("The table for users".to_string()),
             columns,
+            None,
         );
         let tables = vec![table_doc];
         let sql_doc = SqlFileDoc::new(tables);
@@ -365,6 +374,7 @@ mod tests {
                     ColumnDoc::new("email".to_string(), None),
                     ColumnDoc::new("created_at".to_string(), None),
                 ],
+                None,
             ),
             TableDoc::new(
                 None,
@@ -377,6 +387,7 @@ mod tests {
                     ColumnDoc::new("body".to_string(), None),
                     ColumnDoc::new("published_at".to_string(), None),
                 ],
+                None,
             ),
         ])
     }
@@ -398,6 +409,7 @@ mod tests {
                         Some("When the user registered".to_string()),
                     ),
                 ],
+                None,
             ),
             TableDoc::new(
                 None,
@@ -416,6 +428,7 @@ mod tests {
                         Some("When the post was created".to_string()),
                     ),
                 ],
+                None,
             ),
         ]);
         docs.push(first_docs);
@@ -440,6 +453,7 @@ mod tests {
                         Some("When the user registered\nmultiline".to_string()),
                     ),
                 ],
+                None,
             ),
             TableDoc::new(
                 None,
@@ -461,6 +475,7 @@ mod tests {
                         Some("When the post was created\nmultiline".to_string()),
                     ),
                 ],
+                None,
             ),
         ]);
         docs.push(second_docs);
@@ -486,8 +501,10 @@ mod tests {
             "table".to_string(),
             Some("table doc".to_string()),
             vec![col_doc],
+            None,
         );
-        let table_doc_no_doc = TableDoc::new(None, "table".to_string(), None, vec![col_doc_no_doc]);
+        let table_doc_no_doc =
+            TableDoc::new(None, "table".to_string(), None, vec![col_doc_no_doc], None);
         assert_eq!(table_doc.name(), "table");
         assert_eq!(table_doc.schema(), Some("schema"));
         assert_eq!(
@@ -600,6 +617,7 @@ mod tests {
             "users".into(),
             Some("table doc".into()),
             vec![col_with_doc.clone(), col_without_doc],
+            None,
         );
 
         let col_writes = count_writes(&col_with_doc);
@@ -634,7 +652,7 @@ mod tests {
 
     #[test]
     fn table_doc_set_doc_updates_doc() {
-        let mut table = TableDoc::new(None, "users".to_string(), None, Vec::new());
+        let mut table = TableDoc::new(None, "users".to_string(), None, Vec::new(), None);
         assert_eq!(table.name(), "users");
         assert_eq!(table.schema(), None);
         assert_eq!(table.doc(), None);
@@ -654,6 +672,7 @@ mod tests {
                 ColumnDoc::new("id".to_string(), None),
                 ColumnDoc::new("username".to_string(), None),
             ],
+            None,
         );
 
         {

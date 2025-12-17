@@ -3,11 +3,11 @@
 use std::path::{Path, PathBuf};
 
 use crate::{
-    ast::{ParsedSqlFile, ParsedSqlFileSet},
+    ast::ParsedSqlFile,
     comments::Comments,
     docs::{SqlFileDoc, TableDoc},
     error::DocError,
-    files::{SqlFile, SqlFileSet},
+    files::{SqlFile, SqlFilesList},
 };
 
 /// Structure for Sql Documentation, built from [`TableDoc`] and
@@ -15,8 +15,6 @@ use crate::{
 pub struct SqlDoc {
     /// Holds the [`Vec`] of all tables found in all specified files.
     tables: Vec<TableDoc>,
-    /// Optionally holds the [`Vec`] of each file's [`PathBuf`] and the original file's [`SqlFileDoc`]
-    files: Option<Vec<(PathBuf, SqlFileDoc)>>,
 }
 
 /// Builder structure for the [`SqlDoc`]
@@ -45,7 +43,7 @@ pub enum MultiFlatten {
 
 /// Enum for specifying a file doc source as a `directory` or a specific `file`
 #[derive(Debug, Eq, PartialEq)]
-enum SqlFileDocSource<'a>{
+enum SqlFileDocSource<'a> {
     Dir(PathBuf),
     File(PathBuf),
     FromString(&'a str),
@@ -54,8 +52,8 @@ enum SqlFileDocSource<'a>{
 impl SqlDoc {
     /// Method for creating a new [`SqlDoc`]
     #[must_use]
-    pub const fn new(tables: Vec<TableDoc>, files: Option<Vec<(PathBuf, SqlFileDoc)>>) -> Self {
-        Self { tables, files }
+    pub const fn new(tables: Vec<TableDoc>) -> Self {
+        Self { tables }
     }
     /// Method for generating builder from a directory.
     pub fn from_dir<P: AsRef<Path> + ?Sized>(root: &P) -> SqlDocBuilder<'_> {
@@ -138,11 +136,6 @@ impl SqlDoc {
     pub fn into_tables(self) -> Vec<TableDoc> {
         self.tables
     }
-    /// Getter method for returning the `Option<&[(PathBuf,SqlFileDoc)]>`
-    #[must_use]
-    pub fn files(&self) -> Option<&[(PathBuf, SqlFileDoc)]> {
-        self.files.as_deref()
-    }
 }
 
 impl SqlDocBuilder<'_> {
@@ -187,29 +180,30 @@ impl SqlDocBuilder<'_> {
     /// # Errors
     /// - Will return `DocError` bubbled up
     pub fn build(self) -> Result<SqlDoc, DocError> {
-        let docs: Vec<(PathBuf, SqlFileDoc)> = match &self.source {
+        let docs: Vec<SqlFileDoc> = match &self.source {
             SqlFileDocSource::Dir(path) => generate_docs_from_dir(path, &self.deny)?,
             SqlFileDocSource::File(file) => {
                 let gen_files = generate_docs_from_file(file)?;
-                let (path, sql_doc) = gen_files;
-                vec![(path, sql_doc)]
-            },
-            SqlFileDocSource::FromString(content) => {todo!()} 
+                let sql_doc = gen_files;
+                vec![sql_doc]
+            }
+            SqlFileDocSource::FromString(content) => {
+                todo!()
+            }
         };
-        let num_of_tables = docs.iter().map(|(_,s)| s.number_of_tables()).sum();
+        let num_of_tables = docs.iter().map(super::docs::SqlFileDoc::number_of_tables).sum();
         let mut tables = Vec::with_capacity(num_of_tables);
-        let mut sql_doc = if self.retain_files {
+        if self.retain_files {
             let files = docs;
-            for (_, sql_doc) in &files {
+            for sql_doc in &files {
                 tables.extend(sql_doc.clone());
             }
-            SqlDoc { tables, files: Some(files) }
         } else {
-            for (_, sql_doc) in docs {
+            for sql_doc in docs {
                 tables.extend(sql_doc);
             }
-            SqlDoc { tables, files: None }
-        };
+        }
+        let mut sql_doc = SqlDoc { tables };
         match self.multiline_flat {
             MultiFlatten::FlattenWithNone => {
                 sql_doc = flatten_docs(sql_doc, None);
@@ -255,28 +249,24 @@ fn flatten_lines<'a>(lines: impl Iterator<Item = &'a str>, sep: &str) -> String 
 fn generate_docs_from_dir<P: AsRef<Path>, S: AsRef<str>>(
     source: P,
     deny: &[S],
-) -> Result<Vec<(PathBuf, SqlFileDoc)>, DocError> {
+) -> Result<Vec<SqlFileDoc>, DocError> {
     let deny_list: Vec<String> = deny.iter().map(|file| file.as_ref().to_string()).collect();
     let deny_option = if deny_list.is_empty() { None } else { Some(deny_list) };
-    let file_set = SqlFileSet::new(source.as_ref(), deny_option)?;
-    let parsed_files = ParsedSqlFileSet::parse_all(file_set)?;
+    let file_set = SqlFilesList::new(source.as_ref(), deny_option)?;
     let mut sql_docs = Vec::new();
-    for file in parsed_files.files() {
-        let comments = Comments::parse_all_comments_from_file(file)?;
-        let docs = SqlFileDoc::from_parsed_file(file, &comments)?;
-        let path = file.file().path().to_path_buf();
-        sql_docs.push((path, docs));
+    for file in file_set.sql_files_sorted() {
+        let docs = generate_docs_from_file(file)?;
+        sql_docs.push(docs);
     }
     Ok(sql_docs)
 }
 
-fn generate_docs_from_file<P: AsRef<Path>>(source: P) -> Result<(PathBuf, SqlFileDoc), DocError> {
+fn generate_docs_from_file<P: AsRef<Path>>(source: P) -> Result<SqlFileDoc, DocError> {
     let file = SqlFile::new(source.as_ref())?;
     let parsed_file = ParsedSqlFile::parse(file)?;
     let comments = Comments::parse_all_comments_from_file(&parsed_file)?;
     let docs = SqlFileDoc::from_parsed_file(&parsed_file, &comments)?;
-    let path = parsed_file.file().path().to_path_buf();
-    Ok((path, docs))
+    Ok(docs)
 }
 
 #[cfg(test)]
@@ -285,7 +275,7 @@ mod tests {
 
     use crate::{
         SqlDoc,
-        docs::{ColumnDoc, SqlFileDoc, TableDoc},
+        docs::{ColumnDoc, TableDoc},
         error::DocError,
         sql_doc::{MultiFlatten, SqlDocBuilder},
     };
@@ -300,7 +290,7 @@ mod tests {
         let (contents, expected): (Vec<_>, Vec<_>) = sample.into_iter().unzip();
         fs::write(&file, contents.join(""))?;
         let sql_doc = SqlDoc::from_path(&file).build()?;
-        let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect(), None);
+        let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect());
         assert_eq!(sql_doc, doc);
         let _ = fs::remove_dir_all(&base);
         Ok(())
@@ -339,7 +329,7 @@ mod tests {
         let (contents, expected): (Vec<_>, Vec<_>) = sample.into_iter().unzip();
         fs::write(&file, contents.join(""))?;
         let sql_doc = SqlDoc::from_path(&file).build()?;
-        let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect(), None);
+        let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect());
         assert_eq!(sql_doc, doc);
         let table = "users";
         let actual_table = sql_doc.table(table)?;
@@ -356,40 +346,34 @@ mod tests {
 
     #[test]
     fn test_table_err() {
-        let empty_set = SqlDoc::new(vec![], None);
+        let empty_set = SqlDoc::new(vec![]);
         let empty_table_err = empty_set.table("name");
         assert!(empty_table_err.is_err());
         assert!(matches!(
             empty_table_err,
             Err(DocError::TableNotFound { name }) if name == "name"
         ));
-        let duplicate_set = SqlDoc::new(
-            vec![
-                TableDoc::new(None, "duplicate".to_string(), None, vec![]),
-                TableDoc::new(None, "duplicate".to_string(), None, vec![]),
-            ],
-            None,
-        );
+        let duplicate_set = SqlDoc::new(vec![
+            TableDoc::new(None, "duplicate".to_string(), None, vec![], None),
+            TableDoc::new(None, "duplicate".to_string(), None, vec![], None),
+        ]);
         let duplicate_tables_err = duplicate_set.table("duplicate");
         assert!(matches!(duplicate_tables_err, Err(DocError::DuplicateTablesFound { .. })));
     }
 
     #[test]
     fn test_schema_err() {
-        let empty_set = SqlDoc::new(vec![], None);
+        let empty_set = SqlDoc::new(vec![]);
         let empty_table_err = empty_set.table_with_schema("schema", "name");
         assert!(empty_table_err.is_err());
         assert!(matches!(
             empty_table_err,
             Err(DocError::TableNotFound { name }) if name == "name"
         ));
-        let duplicate_set = SqlDoc::new(
-            vec![
-                TableDoc::new(Some("schema".to_string()), "duplicate".to_string(), None, vec![]),
-                TableDoc::new(Some("schema".to_string()), "duplicate".to_string(), None, vec![]),
-            ],
-            None,
-        );
+        let duplicate_set = SqlDoc::new(vec![
+            TableDoc::new(Some("schema".to_string()), "duplicate".to_string(), None, vec![], None),
+            TableDoc::new(Some("schema".to_string()), "duplicate".to_string(), None, vec![], None),
+        ]);
         let duplicate_tables_err = duplicate_set.table_with_schema("schema", "duplicate");
         assert!(matches!(duplicate_tables_err, Err(DocError::DuplicateTablesFound { .. })));
     }
@@ -413,18 +397,16 @@ mod tests {
                 username TEXT NOT NULL
             );
             ",
-                SqlDoc::new(
-                    vec![TableDoc::new(
-                        None,
-                        "users".to_string(),
-                        Some("Users table".to_string()),
-                        vec![
-                            ColumnDoc::new("id".to_string(), Some("id".to_string())),
-                            ColumnDoc::new("username".to_string(), Some("login name".to_string())),
-                        ],
-                    )],
+                SqlDoc::new(vec![TableDoc::new(
                     None,
-                ),
+                    "users".to_string(),
+                    Some("Users table".to_string()),
+                    vec![
+                        ColumnDoc::new("id".to_string(), Some("id".to_string())),
+                        ColumnDoc::new("username".to_string(), Some("login name".to_string())),
+                    ],
+                    None,
+                )]),
             ),
             (
                 r"
@@ -435,18 +417,16 @@ mod tests {
                 title TEXT NOT NULL
             );
             ",
-                SqlDoc::new(
-                    vec![TableDoc::new(
-                        None,
-                        "posts".to_string(),
-                        Some("Posts table".to_string()),
-                        vec![
-                            ColumnDoc::new("id".to_string(), Some("primary key".to_string())),
-                            ColumnDoc::new("title".to_string(), None),
-                        ],
-                    )],
+                SqlDoc::new(vec![TableDoc::new(
                     None,
-                ),
+                    "posts".to_string(),
+                    Some("Posts table".to_string()),
+                    vec![
+                        ColumnDoc::new("id".to_string(), Some("primary key".to_string())),
+                        ColumnDoc::new("title".to_string(), None),
+                    ],
+                    None,
+                )]),
             ),
             (
                 r"
@@ -456,19 +436,17 @@ mod tests {
                 value INTEGER
             );
             ",
-                SqlDoc::new(
-                    vec![TableDoc::new(
-                        None,
-                        "things".to_string(),
-                        None,
-                        vec![
-                            ColumnDoc::new("id".to_string(), None),
-                            ColumnDoc::new("name".to_string(), None),
-                            ColumnDoc::new("value".to_string(), None),
-                        ],
-                    )],
+                SqlDoc::new(vec![TableDoc::new(
                     None,
-                ),
+                    "things".to_string(),
+                    None,
+                    vec![
+                        ColumnDoc::new("id".to_string(), None),
+                        ColumnDoc::new("name".to_string(), None),
+                        ColumnDoc::new("value".to_string(), None),
+                    ],
+                    None,
+                )]),
             ),
             (
                 r"
@@ -480,44 +458,27 @@ mod tests {
                 payload TEXT
             );
             ",
-                SqlDoc::new(
-                    vec![TableDoc::new(
-                        Some("analytics".to_string()),
-                        "events".to_string(),
-                        Some("Table with schema".to_string()),
-                        vec![
-                            ColumnDoc::new("id".to_string(), Some("event id".to_string())),
-                            ColumnDoc::new(
-                                "payload".to_string(),
-                                Some("event payload".to_string()),
-                            ),
-                        ],
-                    )],
+                SqlDoc::new(vec![TableDoc::new(
+                    Some("analytics".to_string()),
+                    "events".to_string(),
+                    Some("Table with schema".to_string()),
+                    vec![
+                        ColumnDoc::new("id".to_string(), Some("event id".to_string())),
+                        ColumnDoc::new("payload".to_string(), Some("event payload".to_string())),
+                    ],
                     None,
-                ),
+                )]),
             ),
         ]
     }
 
     #[test]
     fn test_sql_doc_getters() {
-        let tables = vec![TableDoc::new(None, "name".to_string(), None, vec![])];
-        let files = vec![(
-            PathBuf::from("file.sql"),
-            SqlFileDoc::new(vec![TableDoc::new(None, "name".to_string(), None, vec![])]),
-        )];
-        let sql_doc = SqlDoc::new(
-            vec![TableDoc::new(None, "name".to_string(), None, vec![])],
-            Some(vec![(
-                PathBuf::from("file.sql"),
-                SqlFileDoc::new(vec![TableDoc::new(None, "name".to_string(), None, vec![])]),
-            )]),
-        );
+        let tables = vec![TableDoc::new(None, "name".to_string(), None, vec![], None)];
+        let sql_doc =
+            SqlDoc::new(vec![TableDoc::new(None, "name".to_string(), None, vec![], None)]);
         assert_eq!(sql_doc.tables().len(), 1);
         assert_eq!(sql_doc.tables(), tables);
-
-        assert_eq!(sql_doc.files().iter().len(), 1);
-        assert_eq!(sql_doc.files(), Some(files).as_deref());
     }
 
     #[test]
@@ -545,14 +506,8 @@ mod tests {
             .deny(file.to_str().unwrap_or_else(|| panic!("unable to find file val")))
             .retain_files()
             .build()?;
-        let doc_deny = SqlDoc::new(vec![], Some(vec![]));
-        let doc = SqlDoc::new(
-            expected.clone().into_iter().flat_map(SqlDoc::into_tables).collect(),
-            Some(vec![(
-                file,
-                SqlFileDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect()),
-            )]),
-        );
+        let doc_deny = SqlDoc::new(vec![]);
+        let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect());
         assert_eq!(sql_doc, doc);
         assert_eq!(sql_doc_deny, doc_deny);
         let _ = fs::remove_dir_all(&base);
@@ -595,17 +550,19 @@ mod tests {
                 ColumnDoc::new("c1".into(), Some("a\nb".into())),
                 ColumnDoc::new("c2".into(), None),
             ],
+            None,
         );
         let flat_table = TableDoc::new(
             None,
             "t".into(),
             Some("line1line2".into()),
             vec![ColumnDoc::new("c1".into(), Some("ab".into())), ColumnDoc::new("c2".into(), None)],
+            None,
         );
 
         let output = {
             use crate::sql_doc::flatten_docs;
-            let original = SqlDoc::new(vec![table], None);
+            let original = SqlDoc::new(vec![table]);
             flatten_docs(original, None)
         };
         assert_eq!(output.tables(), vec![flat_table], "NoFlat should not alter docs");
@@ -618,8 +575,9 @@ mod tests {
             "t".into(),
             Some("A\nB\nC".into()),
             vec![ColumnDoc::new("c".into(), Some("x\ny".into()))],
+            None,
         );
-        let doc = SqlDoc::new(vec![table], None);
+        let doc = SqlDoc::new(vec![table]);
 
         let out = {
             use crate::sql_doc::flatten_docs;
@@ -639,8 +597,9 @@ mod tests {
             "t".into(),
             Some("hello\nworld".into()),
             vec![ColumnDoc::new("c".into(), Some("x\ny\nz".into()))],
+            None,
         );
-        let doc = SqlDoc::new(vec![table], None);
+        let doc = SqlDoc::new(vec![table]);
 
         let out = {
             use crate::sql_doc::flatten_docs;
@@ -656,7 +615,7 @@ mod tests {
     #[test]
     fn test_tables_mut_allows_modification() {
         let mut sql_doc =
-            SqlDoc::new(vec![TableDoc::new(None, "t".into(), Some("old".into()), vec![])], None);
+            SqlDoc::new(vec![TableDoc::new(None, "t".into(), Some("old".into()), vec![], None)]);
         for t in sql_doc.tables_mut() {
             t.set_doc("new");
         }
