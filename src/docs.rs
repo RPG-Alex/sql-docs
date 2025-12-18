@@ -21,8 +21,7 @@ impl ColumnDoc {
     /// - name: `String` - the name of the column
     /// - doc: `Option<String>` the comment for the column
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn new(name: String, doc: Option<String>) -> Self {
+    pub const fn new(name: String, doc: Option<String>) -> Self {
         Self { name, doc }
     }
 
@@ -34,7 +33,6 @@ impl ColumnDoc {
 
     /// Getter for the field `doc`
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
     pub fn doc(&self) -> Option<&str> {
         self.doc.as_deref()
     }
@@ -96,14 +94,12 @@ impl TableDoc {
 
     /// Getter for the `name` field
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
     pub fn name(&self) -> &str {
         &self.name
     }
 
     /// Getter for the `doc` field
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
     pub fn doc(&self) -> Option<&str> {
         self.doc.as_deref()
     }
@@ -120,7 +116,6 @@ impl TableDoc {
 
     /// Getter for the `columns` field
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
     pub fn columns(&self) -> &[ColumnDoc] {
         &self.columns
     }

@@ -270,7 +270,11 @@ fn generate_docs_str(content: &str) -> Result<SqlFileDoc, DocError> {
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs, path::PathBuf, vec};
+    use std::{
+        env, fs,
+        path::{Path, PathBuf},
+        vec,
+    };
 
     use crate::{
         SqlDoc,
@@ -289,8 +293,11 @@ mod tests {
         let (contents, expected): (Vec<_>, Vec<_>) = sample.into_iter().unzip();
         fs::write(&file, contents.join(""))?;
         let sql_doc = SqlDoc::from_path(&file).build()?;
-        let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect());
-        assert_eq!(sql_doc, doc);
+        let mut expected_tables: Vec<TableDoc> =
+            expected.into_iter().flat_map(SqlDoc::into_tables).collect();
+        stamp_table_paths(&mut expected_tables, &file);
+        let expected_doc = SqlDoc::new(expected_tables);
+        assert_eq!(sql_doc, expected_doc);
         let _ = fs::remove_dir_all(&base);
         Ok(())
     }
@@ -299,16 +306,16 @@ mod tests {
         let base = env::temp_dir().join("build_sql_doc_from_dir");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
-        let sample = sample_sql();
-        let (contents, expected): (Vec<_>, Vec<_>) = sample.into_iter().unzip();
-        for (idx, contents) in contents.iter().enumerate() {
+        let mut expected: Vec<TableDoc> = Vec::new();
+        for (idx, (contents, doc)) in sample_sql().into_iter().enumerate() {
             let path = base.join(format!("test_file{idx}.sql"));
             fs::write(&path, contents)?;
+            let mut tables = doc.into_tables();
+            stamp_table_paths(&mut tables, &path);
+            expected.extend(tables);
         }
         let sql_doc = SqlDoc::from_dir(&base).build()?;
         let mut actual: Vec<TableDoc> = sql_doc.into_tables();
-        let mut expected: Vec<TableDoc> =
-            expected.into_iter().flat_map(SqlDoc::into_tables).collect();
         assert_eq!(actual.len(), expected.len());
         sort_tables(&mut actual);
         sort_tables(&mut expected);
@@ -327,17 +334,19 @@ mod tests {
         let (contents, expected): (Vec<_>, Vec<_>) = sample.into_iter().unzip();
         fs::write(&file, contents.join(""))?;
         let sql_doc = SqlDoc::from_path(&file).build()?;
-        let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect());
-        assert_eq!(sql_doc, doc);
+        let mut expected_tables: Vec<TableDoc> =
+            expected.into_iter().flat_map(SqlDoc::into_tables).collect();
+        stamp_table_paths(&mut expected_tables, &file);
+        let expected_doc = SqlDoc::new(expected_tables);
+        assert_eq!(sql_doc, expected_doc);
         let table = "users";
-        let actual_table = sql_doc.table(table)?;
-        let expected_table = doc.table(table)?;
-        assert_eq!(actual_table, expected_table);
+        assert_eq!(sql_doc.table(table)?, expected_doc.table(table)?);
         let schema = "analytics";
         let schema_table = "events";
-        let actual_schema = sql_doc.table_with_schema(schema, schema_table)?;
-        let expected_schema = doc.table_with_schema(schema, schema_table)?;
-        assert_eq!(actual_schema, expected_schema);
+        assert_eq!(
+            sql_doc.table_with_schema(schema, schema_table)?,
+            expected_doc.table_with_schema(schema, schema_table)?
+        );
         let _ = fs::remove_dir_all(&base);
         Ok(())
     }
@@ -375,12 +384,20 @@ mod tests {
         let duplicate_tables_err = duplicate_set.table_with_schema("schema", "duplicate");
         assert!(matches!(duplicate_tables_err, Err(DocError::DuplicateTablesFound { .. })));
     }
+
     fn sort_tables(tables: &mut [TableDoc]) {
         tables.sort_by(|a, b| {
             let a_key = (a.schema().unwrap_or(""), a.name());
             let b_key = (b.schema().unwrap_or(""), b.name());
             a_key.cmp(&b_key)
         });
+    }
+
+    fn stamp_table_paths(tables: &mut [TableDoc], path: &Path) {
+        let pb = path.to_path_buf();
+        for t in tables {
+            t.set_path(Some(pb.clone()));
+        }
     }
 
     fn sample_sql() -> Vec<(&'static str, SqlDoc)> {
@@ -489,6 +506,7 @@ mod tests {
         };
         assert_eq!(actual_builder, expected_builder);
     }
+
     #[test]
     fn test_sql_builder_to_sql_doc() -> Result<(), Box<dyn std::error::Error>> {
         let base = env::temp_dir().join("sql_builder_to_sql_doc");
@@ -499,13 +517,14 @@ mod tests {
         let (contents, expected): (Vec<_>, Vec<_>) = sample.into_iter().unzip();
         fs::write(&file, contents.join(""))?;
         let sql_doc = SqlDoc::from_path(&file).build()?;
-        let sql_doc_deny = SqlDoc::from_dir(&base)
-            .deny(file.to_str().unwrap_or_else(|| panic!("unable to find file val")))
-            .build()?;
-        let doc_deny = SqlDoc::new(vec![]);
-        let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect());
-        assert_eq!(sql_doc, doc);
-        assert_eq!(sql_doc_deny, doc_deny);
+        let deny_str = file.to_string_lossy().to_string();
+        let sql_doc_deny = SqlDoc::from_dir(&base).deny(&deny_str).build()?;
+        let mut expected_tables: Vec<TableDoc> =
+            expected.into_iter().flat_map(SqlDoc::into_tables).collect();
+        stamp_table_paths(&mut expected_tables, &file);
+        let expected_doc = SqlDoc::new(expected_tables);
+        assert_eq!(sql_doc, expected_doc);
+        assert_eq!(sql_doc_deny, SqlDoc::new(vec![]));
         let _ = fs::remove_dir_all(&base);
         Ok(())
     }
