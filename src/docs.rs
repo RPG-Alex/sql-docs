@@ -66,7 +66,7 @@ pub struct TableDoc {
     name: String,
     doc: Option<String>,
     columns: Vec<ColumnDoc>,
-    file: Option<PathBuf>,
+    path: Option<PathBuf>,
 }
 
 impl TableDoc {
@@ -83,9 +83,9 @@ impl TableDoc {
         name: String,
         doc: Option<String>,
         columns: Vec<ColumnDoc>,
-        file: Option<PathBuf>,
+        path: Option<PathBuf>,
     ) -> Self {
-        Self { schema, name, doc, columns, file }
+        Self { schema, name, doc, columns, path }
     }
 
     /// Getter for the `Schema` of the table (if there is one)
@@ -111,6 +111,11 @@ impl TableDoc {
     /// Setter to update the table doc
     pub fn set_doc(&mut self, doc: impl Into<String>) {
         self.doc = Some(doc.into());
+    }
+
+    /// Setter for updating the table [`PathBuf`] source
+    pub fn set_path(&mut self, path: Option<impl Into<PathBuf>>) {
+        self.path = path.map(Into::into);
     }
 
     /// Getter for the `columns` field
@@ -202,22 +207,13 @@ impl SqlFileDoc {
                     }
                     let table_leading = comments.leading_comment(table_start);
                     let (schema, name) = schema_and_table(&table.name)?;
-                    let table_doc = match table_leading {
-                        Some(comment) => TableDoc::new(
-                            schema,
-                            name,
-                            Some(comment.text().to_string()),
-                            column_docs,
-                            Some(file.path_into_path_buf()),
-                        ),
-                        None => TableDoc::new(
-                            schema,
-                            name,
-                            None,
-                            column_docs,
-                            Some(file.path_into_path_buf()),
-                        ),
-                    };
+                    let table_doc = TableDoc::new(
+                        schema,
+                        name,
+                        table_leading.as_ref().map(|c| c.text().to_string()),
+                        column_docs,
+                        file.path_into_path_buf(),
+                    );
                     tables.push(table_doc);
                 }
                 // can add support for other types of statements below
@@ -233,6 +229,12 @@ impl SqlFileDoc {
     pub fn tables(&self) -> &[TableDoc] {
         &self.tables
     }
+
+    /// Getter that returns a mutable reference to the [`TableDoc`] vec
+    pub fn tables_mut(&mut self) -> &mut [TableDoc] {
+        &mut self.tables
+    }
+
     /// Returns the number fo tables in the `SqlFileDoc`
     #[must_use]
     pub fn number_of_tables(&self) -> usize {
@@ -336,30 +338,41 @@ mod tests {
             let filename = file
                 .file()
                 .path()
-                .file_name()
+                .and_then(|p| p.file_name())
                 .and_then(|s| s.to_str())
-                .unwrap_or_else(|| panic!("unable to find file name"));
+                .ok_or("unable to parse file")?;
+
+            let got = docs?;
+            let file_path = file.file().path().ok_or("missing path")?;
 
             match filename {
                 "with_single_line_comments.sql" | "with_mixed_comments.sql" => {
-                    assert_eq!(&docs?, &expected_values[0]);
+                    let expected = with_path(expected_values[0].clone(), file_path);
+                    assert_eq!(&got, &expected);
                 }
                 "with_multiline_comments.sql" => {
-                    assert_eq!(&docs?, &expected_values[1]);
+                    let expected = with_path(expected_values[1].clone(), file_path);
+                    assert_eq!(&got, &expected);
                 }
                 "without_comments.sql" => {
-                    let expected = expected_without_comments_docs();
-                    assert_eq!(&docs?, &expected);
+                    let expected = with_path(expected_without_comments_docs(), file_path);
+                    assert_eq!(&got, &expected);
                 }
-                other => {
-                    unreachable!(
-                        "unexpected test file {other}; directory should only contain known test files"
-                    );
-                }
+                _ => unreachable!(),
             }
         }
 
         Ok(())
+    }
+
+    fn with_path(mut doc: SqlFileDoc, path: &std::path::Path) -> SqlFileDoc {
+        let pb = path.to_path_buf();
+
+        for table in doc.tables_mut() {
+            table.set_path(Some(pb.clone()));
+        }
+
+        doc
     }
 
     fn expected_without_comments_docs() -> SqlFileDoc {

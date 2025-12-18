@@ -107,7 +107,7 @@ fn recursive_dir_scan(path: &Path) -> io::Result<Vec<PathBuf>> {
 /// A single `.sql` file and its loaded contents.
 #[derive(Debug)]
 pub struct SqlFile {
-    path: PathBuf,
+    path: Option<PathBuf>,
     content: String,
 }
 
@@ -121,17 +121,23 @@ impl SqlFile {
     /// Returns an [`io::Error`] if the file cannot be read.
     pub fn new(path: &Path) -> io::Result<Self> {
         let content = fs::read_to_string(path)?;
-        Ok(Self { path: path.to_owned(), content })
+        Ok(Self { path: Some(path.to_owned()), content })
+    }
+
+    /// Creates an [`SqlFile`] from a string with a dummy path
+    #[must_use]
+    pub const fn new_from_str(content: String) -> Self {
+        Self { path: None, content }
     }
 
     /// Returns the filesystem path associated with this SQL file.
     #[must_use]
-    pub fn path(&self) -> &Path {
-        &self.path
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
     }
     /// Returns the [`PathBuf`] for the current path
     #[must_use]
-    pub fn path_into_path_buf(&self) -> PathBuf {
+    pub fn path_into_path_buf(&self) -> Option<PathBuf> {
         self.path.clone()
     }
 
@@ -290,7 +296,9 @@ mod tests {
         let sql_file_set = SqlFileSet::new(&base, &[])?;
         for file in sql_file_set.iter() {
             assert_eq!(file.content, sql_statement);
-            found.push(&file.path);
+            if let Some(p) = &file.path {
+                found.push(p);
+            }
         }
         assert_eq!(found, expected);
         let _ = fs::remove_dir_all(&base);

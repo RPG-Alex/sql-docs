@@ -42,13 +42,13 @@ impl ParsedSqlFile {
 
     /// Getter method for returning the current object's file's path
     #[must_use]
-    pub fn path(&self) -> &Path {
+    pub fn path(&self) -> Option<&Path> {
         self.file.path()
     }
 
     /// Getter that returns an [`PathBuf`] for the path rather than `&Path`
     #[must_use]
-    pub fn path_into_path_buf(&self) -> PathBuf {
+    pub fn path_into_path_buf(&self) -> Option<PathBuf> {
         self.file.path_into_path_buf()
     }
 
@@ -108,7 +108,7 @@ mod tests {
         fs::write(&file_path, sql)?;
         let sql_file = SqlFile::new(&file_path)?;
         let parsed = ParsedSqlFile::parse(sql_file)?;
-        assert_eq!(parsed.path(), file_path.as_path());
+        assert_eq!(parsed.path(), Some(file_path.as_path()));
         assert_eq!(parsed.content(), sql);
         assert_eq!(parsed.statements().len(), 1);
         let _ = fs::remove_dir_all(&base);

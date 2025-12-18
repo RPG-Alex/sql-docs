@@ -24,8 +24,6 @@ pub struct SqlDocBuilder<'a> {
     source: SqlFileDocSource<'a>,
     /// The list of Paths to be ignored for parsing purposes.
     deny: Vec<String>,
-    /// Used to indicate maintaining the `[(PathBuf, SqlFileDoc)]`
-    retain_files: bool,
     /// Struct for tracking the settings for flattening multiline comments
     multiline_flat: MultiFlatten,
 }
@@ -60,7 +58,6 @@ impl SqlDoc {
         SqlDocBuilder {
             source: SqlFileDocSource::Dir(root.as_ref().to_path_buf()),
             deny: Vec::new(),
-            retain_files: false,
             multiline_flat: MultiFlatten::NoFlat,
         }
     }
@@ -69,7 +66,16 @@ impl SqlDoc {
         SqlDocBuilder {
             source: SqlFileDocSource::File(path.as_ref().to_path_buf()),
             deny: Vec::new(),
-            retain_files: false,
+            multiline_flat: MultiFlatten::NoFlat,
+        }
+    }
+
+    /// Method for generating builder from a [`str`]
+    #[must_use]
+    pub const fn from_str(content: &str) -> SqlDocBuilder<'_> {
+        SqlDocBuilder {
+            source: SqlFileDocSource::FromString(content),
+            deny: Vec::new(),
             multiline_flat: MultiFlatten::NoFlat,
         }
     }
@@ -149,13 +155,6 @@ impl SqlDocBuilder<'_> {
         self
     }
 
-    /// Setter that ticks on the option to retain the [`Vec<(PathBuf,SqlFileDoc)>`]
-    #[must_use]
-    pub const fn retain_files(mut self) -> Self {
-        self.retain_files = true;
-        self
-    }
-
     /// Method for flattening the multiline comments without additional formatting
     #[must_use]
     pub fn flatten_multiline(mut self) -> Self {
@@ -183,25 +182,18 @@ impl SqlDocBuilder<'_> {
         let docs: Vec<SqlFileDoc> = match &self.source {
             SqlFileDocSource::Dir(path) => generate_docs_from_dir(path, &self.deny)?,
             SqlFileDocSource::File(file) => {
-                let gen_files = generate_docs_from_file(file)?;
-                let sql_doc = gen_files;
+                let sql_doc = generate_docs_from_file(file)?;
                 vec![sql_doc]
             }
             SqlFileDocSource::FromString(content) => {
-                todo!()
+                let sql_docs = generate_docs_str(content)?;
+                vec![sql_docs]
             }
         };
         let num_of_tables = docs.iter().map(super::docs::SqlFileDoc::number_of_tables).sum();
         let mut tables = Vec::with_capacity(num_of_tables);
-        if self.retain_files {
-            let files = docs;
-            for sql_doc in &files {
-                tables.extend(sql_doc.clone());
-            }
-        } else {
-            for sql_doc in docs {
-                tables.extend(sql_doc);
-            }
+        for sql_doc in docs {
+            tables.extend(sql_doc);
         }
         let mut sql_doc = SqlDoc { tables };
         match self.multiline_flat {
@@ -268,6 +260,14 @@ fn generate_docs_from_file<P: AsRef<Path>>(source: P) -> Result<SqlFileDoc, DocE
     Ok(docs)
 }
 
+fn generate_docs_str(content: &str) -> Result<SqlFileDoc, DocError> {
+    let dummy_file = SqlFile::new_from_str(content.to_string());
+    let parsed_sql = ParsedSqlFile::parse(dummy_file)?;
+    let comments = Comments::parse_all_comments_from_file(&parsed_sql)?;
+    let docs = SqlFileDoc::from_parsed_file(&parsed_sql, &comments)?;
+    Ok(docs)
+}
+
 #[cfg(test)]
 mod tests {
     use std::{env, fs, path::PathBuf, vec};
@@ -307,7 +307,6 @@ mod tests {
         }
         let sql_doc = SqlDoc::from_dir(&base).build()?;
         let mut actual: Vec<TableDoc> = sql_doc.into_tables();
-        dbg!(&actual);
         let mut expected: Vec<TableDoc> =
             expected.into_iter().flat_map(SqlDoc::into_tables).collect();
         assert_eq!(actual.len(), expected.len());
@@ -482,11 +481,10 @@ mod tests {
 
     #[test]
     fn test_sql_builder_deny_from_path() {
-        let actual_builder = SqlDoc::from_path("path").deny("path1").deny("path2").retain_files();
+        let actual_builder = SqlDoc::from_path("path").deny("path1").deny("path2");
         let expected_builder = SqlDocBuilder {
             source: crate::sql_doc::SqlFileDocSource::File(PathBuf::from("path")),
             deny: vec!["path1".to_string(), "path2".to_string()],
-            retain_files: true,
             multiline_flat: MultiFlatten::NoFlat,
         };
         assert_eq!(actual_builder, expected_builder);
@@ -500,10 +498,9 @@ mod tests {
         let sample = sample_sql();
         let (contents, expected): (Vec<_>, Vec<_>) = sample.into_iter().unzip();
         fs::write(&file, contents.join(""))?;
-        let sql_doc = SqlDoc::from_path(&file).retain_files().build()?;
+        let sql_doc = SqlDoc::from_path(&file).build()?;
         let sql_doc_deny = SqlDoc::from_dir(&base)
             .deny(file.to_str().unwrap_or_else(|| panic!("unable to find file val")))
-            .retain_files()
             .build()?;
         let doc_deny = SqlDoc::new(vec![]);
         let doc = SqlDoc::new(expected.into_iter().flat_map(SqlDoc::into_tables).collect());

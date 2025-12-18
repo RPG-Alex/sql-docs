@@ -435,9 +435,9 @@ mod tests {
             let filename = file
                 .file()
                 .path()
-                .file_name()
+                .and_then(|p| p.file_name())
                 .and_then(|s| s.to_str())
-                .unwrap_or_else(|| panic!("test file name should be valid UTF-8"));
+                .ok_or("Should have a file name")?;
 
             match filename {
                 "with_single_line_comments.sql" => {
@@ -536,17 +536,16 @@ mod tests {
         let path = Path::new("sql_files");
         let set = SqlFileSet::new(path, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
-        let file = {
-            let Some(f) = parsed_set.files().iter().find(|f| {
-                let Some(path) = f.file().path().to_str() else {
-                    return false;
-                };
-                path.ends_with("with_single_line_comments.sql")
-            }) else {
-                panic!("with_single_line_comments.sql should be present");
-            };
-            f
-        };
+        let file = parsed_set
+            .files()
+            .iter()
+            .find(|f| {
+                f.file()
+                    .path()
+                    .and_then(|p| p.to_str())
+                    .is_some_and(|p| p.ends_with("with_single_line_comments.sql"))
+            })
+            .ok_or("with_single_line_comments.sql should be present")?;
 
         let comments = Comments::parse_all_comments_from_file(file)?;
         let comments = comments.comments();
@@ -574,17 +573,17 @@ mod tests {
         let path = Path::new("sql_files");
         let set = SqlFileSet::new(path, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
-        let file = {
-            let Some(f) = parsed_set.files().iter().find(|f| {
-                let Some(path) = f.file().path().to_str() else {
-                    return false;
-                };
-                path.ends_with("with_multiline_comments.sql")
-            }) else {
-                panic!("with_multiline_comments.sql should be present");
-            };
-            f
-        };
+        let file = parsed_set
+            .files()
+            .iter()
+            .find(|f| {
+                f.file()
+                    .path()
+                    .and_then(|p| p.to_str())
+                    .is_some_and(|p| p.ends_with("with_multiline_comments.sql"))
+            })
+            .ok_or("with_multiline_comments.sql should be present")?;
+
         let comments = Comments::parse_all_comments_from_file(file)?;
         let comments = comments.comments();
         assert_eq!(comments.len(), 11);
