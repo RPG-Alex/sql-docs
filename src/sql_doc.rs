@@ -251,8 +251,7 @@ fn generate_docs_from_dir<P: AsRef<Path>, S: AsRef<str>>(
     deny: &[S],
 ) -> Result<Vec<SqlFileDoc>, DocError> {
     let deny_list: Vec<String> = deny.iter().map(|file| file.as_ref().to_string()).collect();
-    let deny_option = if deny_list.is_empty() { None } else { Some(deny_list) };
-    let file_set = SqlFilesList::new(source.as_ref(), deny_option)?;
+    let file_set = SqlFilesList::new(source, &deny_list)?;
     let mut sql_docs = Vec::new();
     for file in file_set.sql_files_sorted() {
         let docs = generate_docs_from_file(file)?;

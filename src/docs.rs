@@ -326,7 +326,7 @@ mod tests {
         use crate::{ast::ParsedSqlFileSet, comments::Comments, files::SqlFileSet};
         use std::path::Path;
         let path = Path::new("sql_files");
-        let set = SqlFileSet::new(path, None)?;
+        let set = SqlFileSet::new(path, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let expected_values = expect_values();
 

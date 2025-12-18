@@ -50,13 +50,11 @@ impl SqlFilesList {
     /// # Errors
     ///
     /// Returns an [`io::Error`] if directory traversal fails.
-    pub fn new<P: AsRef<Path>>(path: P, deny_list: Option<Vec<String>>) -> io::Result<Self> {
+    pub fn new<P: AsRef<Path>>(path: P, deny_list: &[String]) -> io::Result<Self> {
         let recursive_scan = recursive_dir_scan(path.as_ref())?;
-        let allow_list = if let Some(list) = deny_list {
-            let deny = DenyList::new(&list);
+        let allow_list = {
+            let deny = DenyList::new(deny_list);
             recursive_scan.into_iter().filter(|p| !deny.deny_files().contains(p)).collect()
-        } else {
-            recursive_scan
         };
 
         Ok(Self { sql_files: allow_list })
@@ -163,7 +161,7 @@ impl SqlFileSet {
     ///
     /// Returns an [`io::Error`] if directory traversal fails or if any of the
     /// discovered SQL files cannot be read.
-    pub fn new(path: &Path, deny_list: Option<Vec<String>>) -> io::Result<Self> {
+    pub fn new(path: &Path, deny_list: &[String]) -> io::Result<Self> {
         let sql_files_list = SqlFilesList::new(path, deny_list)?;
 
         let files_contents = sql_files_list
@@ -260,7 +258,7 @@ mod tests {
         fs::File::create(&file2)?;
         fs::File::create(&non_sql1)?;
         fs::File::create(&non_sql2)?;
-        let sql_file_list = SqlFilesList::new(&base, None)?;
+        let sql_file_list = SqlFilesList::new(&base, &[])?;
         let mut expected = vec![&file1, &file2];
         expected.sort();
         assert_eq!(sql_file_list.sql_files_sorted(), expected);
@@ -289,7 +287,7 @@ mod tests {
         let mut expected = vec![&file1, &file2];
         expected.sort();
         let mut found: Vec<&PathBuf> = Vec::new();
-        let sql_file_set = SqlFileSet::new(&base, None)?;
+        let sql_file_set = SqlFileSet::new(&base, &[])?;
         for file in sql_file_set.iter() {
             assert_eq!(file.content, sql_statement);
             found.push(&file.path);
@@ -314,7 +312,7 @@ mod tests {
         fs::File::create(&file2)?;
         fs::File::create(&non_sql1)?;
         fs::File::create(&non_sql2)?;
-        let deny_list = Some(vec![file1.to_string_lossy().to_string()]);
+        let deny_list = &[file1.to_string_lossy().to_string()];
         let sql_file_list = SqlFilesList::new(&base, deny_list)?;
         let found = sql_file_list.sql_files_sorted();
         let mut expected = vec![&file2];
@@ -328,7 +326,7 @@ mod tests {
     #[test]
     fn test_file_fails() {
         let invalid_dir = "INVALID";
-        let failed_list = SqlFilesList::new(invalid_dir, None);
+        let failed_list = SqlFilesList::new(invalid_dir, &[]);
         assert!(failed_list.is_err());
 
         let base = env::temp_dir().join("test_files_fails_dir");
@@ -336,14 +334,14 @@ mod tests {
         fs::create_dir_all(&base).unwrap_or_else(|e| panic!("panicked on {e}"));
         let bad_file = base.join("one.sql");
         fs::File::create(&bad_file).unwrap_or_else(|e| panic!("panicked on {e}"));
-        let failed_read = SqlFilesList::new(&bad_file, None);
+        let failed_read = SqlFilesList::new(&bad_file, &[]);
         assert!(failed_read.is_err());
         let missed_file = base.join("missing.sql");
         let missing_file = SqlFile::new(&missed_file);
         assert!(missing_file.is_err());
         let _ = fs::remove_dir_all(&base);
 
-        let bad_file_list = SqlFileSet::new(Path::new(invalid_dir), None);
+        let bad_file_list = SqlFileSet::new(Path::new(invalid_dir), &[]);
         assert!(bad_file_list.is_err());
     }
 }

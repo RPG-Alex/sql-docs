@@ -427,7 +427,7 @@ mod tests {
         use std::path::Path;
 
         let path = Path::new("sql_files");
-        let set = SqlFileSet::new(path, None)?;
+        let set = SqlFileSet::new(path, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
 
         for file in parsed_set.files() {
@@ -534,7 +534,7 @@ mod tests {
         use crate::{ast::ParsedSqlFileSet, files::SqlFileSet};
         use std::path::Path;
         let path = Path::new("sql_files");
-        let set = SqlFileSet::new(path, None)?;
+        let set = SqlFileSet::new(path, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let file = {
             let Some(f) = parsed_set.files().iter().find(|f| {
@@ -572,7 +572,7 @@ mod tests {
 
         use crate::{ast::ParsedSqlFileSet, files::SqlFileSet};
         let path = Path::new("sql_files");
-        let set = SqlFileSet::new(path, None)?;
+        let set = SqlFileSet::new(path, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let file = {
             let Some(f) = parsed_set.files().iter().find(|f| {

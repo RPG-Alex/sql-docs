@@ -128,7 +128,7 @@ mod tests {
         let sql2 = "CREATE TABLE posts (id INTEGER PRIMARY KEY);";
         fs::write(&file1, sql1)?;
         fs::write(&file2, sql2)?;
-        let set = SqlFileSet::new(&base, None)?;
+        let set = SqlFileSet::new(&base, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let existing_files = parsed_set.files();
         assert_eq!(existing_files.len(), 2);
