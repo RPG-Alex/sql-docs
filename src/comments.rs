@@ -364,6 +364,8 @@ impl Comments {
 
 #[cfg(test)]
 mod tests {
+    use std::{env, fs};
+
     use crate::comments::{Comment, CommentError, CommentKind, Comments, Location, Span};
 
     #[test]
@@ -424,10 +426,22 @@ mod tests {
     #[test]
     fn parse_comments() -> Result<(), Box<dyn std::error::Error>> {
         use crate::{ast::ParsedSqlFileSet, comments::Comments, files::SqlFileSet};
-        use std::path::Path;
-
-        let path = Path::new("sql_files");
-        let set = SqlFileSet::new(path, &[])?;
+        let base = env::temp_dir().join("all_sql_files");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base)?;
+        let file1 = base.join("with_single_line_comments.sql");
+        fs::File::create(&file1)?;
+        fs::write(&file1, single_line_comments_sql())?;
+        let file2 = base.join("with_multiline_comments.sql");
+        fs::File::create(&file2)?;
+        fs::write(&file2, multiline_comments_sql())?;
+        let file3 = base.join("with_mixed_comments.sql");
+        fs::File::create(&file3)?;
+        fs::write(&file3, mixed_comments_sql())?;
+        let file4 = base.join("without_comments.sql");
+        fs::File::create(&file4)?;
+        fs::write(&file4, no_comments_sql())?;
+        let set = SqlFileSet::new(&base, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
 
         for file in parsed_set.files() {
@@ -459,7 +473,7 @@ mod tests {
                 }
             }
         }
-
+        let _ = fs::remove_dir_all(&base);
         Ok(())
     }
 
@@ -476,6 +490,122 @@ mod tests {
         for (i, comment) in comments.iter().enumerate() {
             assert_eq!(expected[i], comment.kind().comment(), "comment at index {i} did not match");
         }
+    }
+
+    fn single_line_comments_sql() -> &'static str {
+        "-- Users table stores user account information
+CREATE TABLE users (
+    -- Primary key
+    id INTEGER PRIMARY KEY,
+    -- Username for login
+    username VARCHAR(255) NOT NULL,
+    -- Email address
+    email VARCHAR(255) UNIQUE NOT NULL,
+    -- When the user registered
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Posts table stores blog posts
+CREATE TABLE posts (
+    -- Primary key
+    id INTEGER PRIMARY KEY,
+    -- Post title
+    title VARCHAR(255) NOT NULL,
+    -- Foreign key linking to users
+    user_id INTEGER NOT NULL,
+    -- Main body text
+    body TEXT NOT NULL,
+    -- When the post was created
+    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);"
+    }
+
+    fn multiline_comments_sql() -> &'static str {
+        r#"/* Users table stores user account information 
+multiline */
+CREATE TABLE users (
+    /* Primary key 
+    multiline */
+    id INTEGER PRIMARY KEY,
+    /* Username for login 
+    multiline */
+    username VARCHAR(255) NOT NULL,
+    /* Email address 
+    multiline */
+    email VARCHAR(255) UNIQUE NOT NULL,
+    /* When the user registered 
+    multiline */
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+/* Posts table stores blog posts 
+multiline */
+CREATE TABLE posts (
+    /* Primary key 
+    multiline */
+    id INTEGER PRIMARY KEY,
+    /* Post title 
+    multiline */
+    title VARCHAR(255) NOT NULL,
+    /* Foreign key linking to users 
+    multiline */
+    user_id INTEGER NOT NULL,
+    /* Main body text 
+    multiline */
+    body TEXT NOT NULL,
+    /* When the post was created 
+    multiline */
+    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);"#
+    }
+
+    fn no_comments_sql() -> &'static str {
+        "CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE posts (
+    id INTEGER PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    user_id INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);"
+    }
+
+    fn mixed_comments_sql() -> &'static str {
+        "-- interstitial Comment above statements (should be ignored)
+
+/* Users table stores user account information */
+CREATE TABLE users ( /* users interstitial comment 
+(should be ignored) */
+    -- Primary key
+    id INTEGER PRIMARY KEY, -- Id comment that is interstitial (should be ignored)
+    /* Username for login */
+    username VARCHAR(255) NOT NULL,
+    -- Email address
+    email VARCHAR(255) UNIQUE NOT NULL,
+    /* When the user registered */
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+/* Posts table stores blog posts */
+CREATE TABLE posts (
+    -- Primary key
+    id INTEGER PRIMARY KEY,
+    /* Post title */
+    title VARCHAR(255) NOT NULL,
+    -- Foreign key linking to users
+    user_id INTEGER NOT NULL,
+    /* Main body text */
+    body TEXT NOT NULL,
+    -- When the post was created
+    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"
     }
 
     fn expected_single_line_comments() -> &'static [&'static str] {
@@ -532,20 +662,21 @@ mod tests {
     #[test]
     fn single_line_comment_spans_are_correct() -> Result<(), Box<dyn std::error::Error>> {
         use crate::{ast::ParsedSqlFileSet, files::SqlFileSet};
-        use std::path::Path;
-        let path = Path::new("sql_files");
-        let set = SqlFileSet::new(path, &[])?;
+        let base = env::temp_dir().join("single_line_spans");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base)?;
+        let file = base.join("single.sql");
+        fs::File::create(&file)?;
+        fs::write(&file, single_line_comments_sql())?;
+        let set = SqlFileSet::new(&base, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let file = parsed_set
             .files()
             .iter()
             .find(|f| {
-                f.file()
-                    .path()
-                    .and_then(|p| p.to_str())
-                    .is_some_and(|p| p.ends_with("with_single_line_comments.sql"))
+                f.file().path().and_then(|p| p.to_str()).is_some_and(|p| p.ends_with("single.sql"))
             })
-            .ok_or("with_single_line_comments.sql should be present")?;
+            .ok_or("single.sql should be present")?;
 
         let comments = Comments::parse_all_comments_from_file(file)?;
         let comments = comments.comments();
@@ -562,27 +693,28 @@ mod tests {
             primary_key.span().end().column() > primary_key.span().start().column(),
             "end column should be after start column",
         );
+        let _ = fs::remove_dir_all(&base);
         Ok(())
     }
 
     #[test]
     fn multiline_comment_spans_are_correct() -> Result<(), Box<dyn std::error::Error>> {
-        use std::path::Path;
-
         use crate::{ast::ParsedSqlFileSet, files::SqlFileSet};
-        let path = Path::new("sql_files");
-        let set = SqlFileSet::new(path, &[])?;
+        let base = env::temp_dir().join("multi_line_spans");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base)?;
+        let file = base.join("multi.sql");
+        fs::File::create(&file)?;
+        fs::write(&file, multiline_comments_sql())?;
+        let set = SqlFileSet::new(&base, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let file = parsed_set
             .files()
             .iter()
             .find(|f| {
-                f.file()
-                    .path()
-                    .and_then(|p| p.to_str())
-                    .is_some_and(|p| p.ends_with("with_multiline_comments.sql"))
+                f.file().path().and_then(|p| p.to_str()).is_some_and(|p| p.ends_with("multi.sql"))
             })
-            .ok_or("with_multiline_comments.sql should be present")?;
+            .ok_or("multi.sql should be present")?;
 
         let comments = Comments::parse_all_comments_from_file(file)?;
         let comments = comments.comments();
@@ -606,6 +738,7 @@ mod tests {
             primary_key.span().end().column() > primary_key.span().start().column(),
             "end column should be after start column for primary key multiline comment",
         );
+        let _ = fs::remove_dir_all(&base);
         Ok(())
     }
 

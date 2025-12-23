@@ -286,6 +286,7 @@ fn schema_and_table(name: &ObjectName) -> Result<(Option<String>, String), DocEr
 #[cfg(test)]
 mod tests {
     use core::fmt;
+    use std::{env, fs};
 
     use sqlparser::{
         ast::{Ident, ObjectName, ObjectNamePart, ObjectNamePartFunction},
@@ -318,12 +319,142 @@ mod tests {
         assert_eq!(sql_doc_val_column.name(), "id");
     }
 
+ fn single_line_comments_sql() -> &'static str {
+        "-- Users table stores user account information
+CREATE TABLE users (
+    -- Primary key
+    id INTEGER PRIMARY KEY,
+    -- Username for login
+    username VARCHAR(255) NOT NULL,
+    -- Email address
+    email VARCHAR(255) UNIQUE NOT NULL,
+    -- When the user registered
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Posts table stores blog posts
+CREATE TABLE posts (
+    -- Primary key
+    id INTEGER PRIMARY KEY,
+    -- Post title
+    title VARCHAR(255) NOT NULL,
+    -- Foreign key linking to users
+    user_id INTEGER NOT NULL,
+    -- Main body text
+    body TEXT NOT NULL,
+    -- When the post was created
+    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);"
+    }
+
+    fn multiline_comments_sql() -> &'static str {
+        r#"/* Users table stores user account information 
+multiline */
+CREATE TABLE users (
+    /* Primary key 
+    multiline */
+    id INTEGER PRIMARY KEY,
+    /* Username for login 
+    multiline */
+    username VARCHAR(255) NOT NULL,
+    /* Email address 
+    multiline */
+    email VARCHAR(255) UNIQUE NOT NULL,
+    /* When the user registered 
+    multiline */
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+/* Posts table stores blog posts 
+multiline */
+CREATE TABLE posts (
+    /* Primary key 
+    multiline */
+    id INTEGER PRIMARY KEY,
+    /* Post title 
+    multiline */
+    title VARCHAR(255) NOT NULL,
+    /* Foreign key linking to users 
+    multiline */
+    user_id INTEGER NOT NULL,
+    /* Main body text 
+    multiline */
+    body TEXT NOT NULL,
+    /* When the post was created 
+    multiline */
+    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);"#
+    }
+
+    fn no_comments_sql() -> &'static str {
+        "CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE posts (
+    id INTEGER PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    user_id INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);"
+    }
+
+    fn mixed_comments_sql() -> &'static str {
+        "-- interstitial Comment above statements (should be ignored)
+
+/* Users table stores user account information */
+CREATE TABLE users ( /* users interstitial comment 
+(should be ignored) */
+    -- Primary key
+    id INTEGER PRIMARY KEY, -- Id comment that is interstitial (should be ignored)
+    /* Username for login */
+    username VARCHAR(255) NOT NULL,
+    -- Email address
+    email VARCHAR(255) UNIQUE NOT NULL,
+    /* When the user registered */
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+/* Posts table stores blog posts */
+CREATE TABLE posts (
+    -- Primary key
+    id INTEGER PRIMARY KEY,
+    /* Post title */
+    title VARCHAR(255) NOT NULL,
+    -- Foreign key linking to users
+    user_id INTEGER NOT NULL,
+    /* Main body text */
+    body TEXT NOT NULL,
+    -- When the post was created
+    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"
+    }
+
+
     #[test]
     fn generate_docs_files() -> Result<(), Box<dyn std::error::Error>> {
         use crate::{ast::ParsedSqlFileSet, comments::Comments, files::SqlFileSet};
-        use std::path::Path;
-        let path = Path::new("sql_files");
-        let set = SqlFileSet::new(path, &[])?;
+        let base = env::temp_dir().join("all_sql_files2");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base)?;
+        let file1 = base.join("with_single_line_comments.sql");
+        fs::File::create(&file1)?;
+        fs::write(&file1, single_line_comments_sql())?;
+        let file2 = base.join("with_multiline_comments.sql");
+        fs::File::create(&file2)?;
+        fs::write(&file2, multiline_comments_sql())?;
+        let file3 = base.join("with_mixed_comments.sql");
+        fs::File::create(&file3)?;
+        fs::write(&file3, mixed_comments_sql())?;
+        let file4 = base.join("without_comments.sql");
+        fs::File::create(&file4)?;
+        fs::write(&file4, no_comments_sql())?;
+        let set = SqlFileSet::new(&base, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let expected_values = expect_values();
 
@@ -356,7 +487,7 @@ mod tests {
                 _ => unreachable!(),
             }
         }
-
+        let _ = fs::remove_dir_all(&base);
         Ok(())
     }
 
