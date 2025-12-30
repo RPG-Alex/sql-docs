@@ -10,6 +10,7 @@ use std::{
 /// A list of SQL files that should be excluded from processing.
 ///
 /// Entries in the deny list are treated as full [`PathBuf`] paths.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DenyList {
     deny_files: Vec<PathBuf>,
 }

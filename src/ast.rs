@@ -13,6 +13,7 @@ use sqlparser::{
 use crate::files::{SqlFile, SqlFileSet};
 
 /// A single SQL file plus all [`Statement`].
+#[derive(Debug)]
 pub struct ParsedSqlFile {
     file: SqlFile,
     statements: Vec<Statement>,
@@ -67,6 +68,7 @@ impl ParsedSqlFile {
 }
 
 /// Struct to contain the vector of parsed SQL files
+#[derive(Debug)]
 pub struct ParsedSqlFileSet {
     files: Vec<ParsedSqlFile>,
 }

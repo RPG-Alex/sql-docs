@@ -1,7 +1,7 @@
 //! Convert parsed SQL + extracted comments into structured documentation types.
 
 use core::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use sqlparser::ast::{Ident, ObjectName, ObjectNamePart, Spanned, Statement};
 
@@ -125,10 +125,10 @@ impl TableDoc {
         &mut self.columns
     }
 
-    /// Getter method for retrieving the table's [`PathBuf`]
+    /// Getter method for retrieving the table's [`Path`]
     #[must_use]
-    pub const fn path(&self) -> &Option<PathBuf> {
-        &self.path
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
     }
 }
 
@@ -859,12 +859,12 @@ CREATE TABLE posts (
     #[test]
     fn table_doc_path_getter_returns_expected_value() {
         let mut table = TableDoc::new(None, "users".to_string(), None, Vec::new(), None);
-        assert_eq!(table.path(), &None);
+        assert_eq!(table.path(), None);
         let pb = PathBuf::from("some/dir/file.sql");
         table.set_path(Some(pb.clone()));
-        assert_eq!(table.path(), &Some(pb));
+        assert_eq!(table.path(), Some(pb.as_path()));
         let no_path: Option<PathBuf> = None;
         table.set_path(no_path);
-        assert_eq!(table.path(), &None);
+        assert_eq!(table.path(), None);
     }
 }

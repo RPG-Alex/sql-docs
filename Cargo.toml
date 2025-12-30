@@ -3,21 +3,11 @@ name = "sql_docs"
 version = "1.0.0"
 edition = "2024"
 description = "A crate for parsing comments from sql files and using them for documentation generation"
-license = "GNU General Public License v3.0"
+documentation = "https://docs.rs/sql_docs"
+license-file = "LICENSE"
 repository = "https://github.com/rpg-alex/sql-docs"
 readme = "README.md"
-keywords = [
-  "sql",
-  "documentation",
-  "parser",
-  "sqlparser",
-  "filesystem",
-  "cli",
-  "schema",
-  "introspection",
-  "codegen",
-  "migrations",
-]
+keywords = ["sql", "documentation", "parser", "schema", "codegen"]
 
 categories = [
   "database",
