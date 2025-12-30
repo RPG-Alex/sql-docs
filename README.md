@@ -11,7 +11,7 @@ This crate extracts **documentation** from SQL files by parsing:
 - Line and block comments
 - Table and column locations
 
-It then attaches comments to the SQL structures they describe, producing a structured, queryable documentation model.
+Then comments are attached to the SQL structures they describe, producing a structured, queryable documentation model.
 
 ## Example 
 
