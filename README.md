@@ -71,7 +71,7 @@ CREATE TABLE users (
     // Optional table-level documentation
     assert_eq!(users.doc(), Some("Table storing user accounts"));
     // Path to the source file
-    assert_eq!(users.path(), &Some(example));
+    assert_eq!(users.path(), Some(example.as_ref()));
 
     let _ = fs::remove_dir_all(&base);
     Ok(())
