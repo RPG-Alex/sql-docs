@@ -4,7 +4,7 @@
 [![Codecov](https://codecov.io/gh/rpg-alex/sql-docs/branch/main/graph/badge.svg)](https://codecov.io/gh/rpg-alex)
 [![CI](https://github.com/RPG-Alex/sql-docs/actions/workflows/rust.yml/badge.svg)](https://github.com/RPG-Alex/sql-docs/actions/workflows/rust.yml)
 [![Documentation](https://docs.rs/sql_docs/badge.svg)](https://docs.rs/sql_docs)
-
+ 
 This crate extracts **documentation** from SQL files by parsing:
 
 - SQL statements (via [`sqlparser`](https://github.com/sqlparser-rs/sqlparser-rs))
