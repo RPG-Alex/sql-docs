@@ -68,7 +68,7 @@ pub struct TableDoc {
 }
 
 impl TableDoc {
-    /// Creates a new [`TableDoc`]
+    /// Creates a new [`TableDoc`] after sorting [`ColumnDoc`] by name
     ///
     /// # Parameters
     /// - name: `String` - the name of the table
@@ -80,9 +80,10 @@ impl TableDoc {
         schema: Option<String>,
         name: String,
         doc: Option<String>,
-        columns: Vec<ColumnDoc>,
+        mut columns: Vec<ColumnDoc>,
         path: Option<PathBuf>,
     ) -> Self {
+        columns.sort_by(|a,b| a.name().cmp(b.name()));
         Self { schema, name, doc, columns, path }
     }
 
