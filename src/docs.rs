@@ -125,6 +125,28 @@ impl TableDoc {
         &mut self.columns
     }
 
+    /// Method for finding a specific [`ColumnDoc`] from `schema` and table `name`
+    ///
+    /// # Parameters
+    /// - the column's `name` as a [`str`]
+    ///
+    /// # Errors
+    /// - Will return [`DocError::ColumnNotFound`] if the expected table is not found
+    pub fn column(&self, column: &str) -> Result<&ColumnDoc, DocError> {
+        let matches = self
+            .columns
+            .iter()
+            .filter(|col_doc| col_doc.name() == column)
+            .collect::<Vec<&ColumnDoc>>();
+        match matches.as_slice() {
+            [] => Err(DocError::ColumnNotFound { name: column.to_owned() }),
+            [only] => Ok(*only),
+            _ => Err(DocError::DuplicateColumnsFound {
+                columns: matches.into_iter().cloned().collect(),
+            }),
+        }
+    }
+
     /// Getter method for retrieving the table's [`Path`]
     #[must_use]
     pub fn path(&self) -> Option<&Path> {
@@ -851,7 +873,7 @@ CREATE TABLE posts (
         assert_eq!(got, expected);
     }
     #[test]
-    fn table_doc_path_getter_returns_expected_value() {
+    fn test_table_doc_path_getter_returns_expected_value() {
         let mut table = TableDoc::new(None, "users".to_owned(), None, Vec::new(), None);
         assert_eq!(table.path(), None);
         let pb = PathBuf::from("some/dir/file.sql");
@@ -860,5 +882,26 @@ CREATE TABLE posts (
         let no_path: Option<PathBuf> = None;
         table.set_path(no_path);
         assert_eq!(table.path(), None);
+    }
+
+    #[test]
+    fn test_table_doc_column() {
+        let table = TableDoc::new(
+            None,
+            "users".to_owned(),
+            None,
+            vec![
+                ColumnDoc::new("id".to_owned(), None),
+                ColumnDoc::new("username".to_owned(), None),
+            ],
+            None,
+        );
+
+        let col = table.column("id").unwrap_or_else(|_| panic!("Column 'id' should exist"));
+        assert_eq!(col.name(), "id");
+
+        let missing = table.column("nope");
+        assert!(missing.is_err());
+        assert!(matches!(missing, Err(DocError::ColumnNotFound { name }) if name == "nope"));
     }
 }

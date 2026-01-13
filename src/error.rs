@@ -1,6 +1,9 @@
 //! Error types returned by this crate’s public APIs.
 
-use crate::{comments::CommentError, docs::TableDoc};
+use crate::{
+    comments::CommentError,
+    docs::{ColumnDoc, TableDoc},
+};
 use core::fmt;
 use sqlparser::parser::ParserError;
 use std::{error, fmt::Debug};
@@ -29,10 +32,20 @@ pub enum DocError {
         /// The name of the table that was not found
         name: String,
     },
+    /// Column not found when searching [`crate::docs::TableDoc`]
+    ColumnNotFound {
+        /// The name of the column not found
+        name: String,
+    },
     /// Duplicate tables with same name were found when searching [`crate::SqlDoc`]
     DuplicateTablesFound {
         /// `Vec` of the [`TableDoc`] for each duplicate table found
         tables: Vec<TableDoc>,
+    },
+    /// Duplicate columns with same name were found when searching a single [`TableDoc`]
+    DuplicateColumnsFound {
+        /// `Vec` of the [`crate::docs::ColumnDoc`] for each duplicate table found
+        columns: Vec<ColumnDoc>,
     },
 }
 
@@ -48,9 +61,17 @@ impl fmt::Display for DocError {
                 write!(f, "{message} at line {line}, column {column}")
             }
             Self::TableNotFound { name } => write!(f, "Table not found in SqlDoc: {name}"),
+            Self::ColumnNotFound { name } => write!(f, "Column not found in TableDoc: {name}"),
             Self::DuplicateTablesFound { tables } => {
                 writeln!(f, "Duplicate tables found:")?;
                 for t in tables {
+                    writeln!(f, "{t}")?;
+                }
+                Ok(())
+            }
+            Self::DuplicateColumnsFound { columns } => {
+                writeln!(f, "Duplicate columns found:")?;
+                for t in columns {
                     writeln!(f, "{t}")?;
                 }
                 Ok(())
@@ -67,7 +88,9 @@ impl error::Error for DocError {
             Self::SqlParserError(e) => Some(e),
             Self::InvalidObjectName { .. }
             | Self::TableNotFound { .. }
-            | Self::DuplicateTablesFound { .. } => None,
+            | Self::ColumnNotFound { .. }
+            | Self::DuplicateTablesFound { .. }
+            | Self::DuplicateColumnsFound { .. } => None,
         }
     }
 }
@@ -220,6 +243,36 @@ mod tests {
         let not_found = DocError::TableNotFound { name: "x".to_string() };
         assert!(not_found.source().is_none());
         let dup = DocError::DuplicateTablesFound { tables: vec![] };
+        assert!(dup.source().is_none());
+    }
+
+    #[test]
+    fn test_doc_error_display_column_not_found() {
+        let e = DocError::ColumnNotFound { name: "id".to_string() };
+        assert_eq!(e.to_string(), "Column not found in TableDoc: id");
+    }
+
+    #[test]
+    fn test_doc_error_display_duplicate_columns_found() {
+        use crate::docs::ColumnDoc;
+
+        let c1 = ColumnDoc::new("dup_col".to_string(), None);
+        let c2 = ColumnDoc::new("dup_col".to_string(), None);
+        let e = DocError::DuplicateColumnsFound { columns: vec![c1, c2] };
+
+        let s = e.to_string();
+        assert!(s.contains("Duplicate columns found:"), "output was: {s}");
+        assert!(s.contains("dup_col"), "output was: {s}");
+    }
+
+    #[test]
+    fn test_doc_error_source_none_for_column_variants() {
+        use std::error::Error as _;
+
+        let not_found = DocError::ColumnNotFound { name: "x".to_string() };
+        assert!(not_found.source().is_none());
+
+        let dup = DocError::DuplicateColumnsFound { columns: vec![] };
         assert!(dup.source().is_none());
     }
 }
