@@ -1,6 +1,6 @@
 [package]
 name = "sql_docs"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2024"
 description = "A crate for parsing comments from sql files and using them for documentation generation"
 documentation = "https://docs.rs/sql_docs"
