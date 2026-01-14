@@ -25,7 +25,6 @@ fuzzing = []
 sqlparser = "0.60.0"
 
 
-
 [lints.rust]
 missing_docs = "forbid"
 unreachable_patterns = "forbid"
