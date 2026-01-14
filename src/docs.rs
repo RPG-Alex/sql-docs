@@ -21,7 +21,7 @@ impl ColumnDoc {
     /// - name: `String` - the name of the column
     /// - doc: `Option<String>` the comment for the column
     #[must_use]
-    pub const fn new(name: String, doc: Option<String>) -> Self {
+    pub fn new(name: String, doc: Option<String>) -> Self {
         Self { name, doc }
     }
 
@@ -133,19 +133,8 @@ impl TableDoc {
     ///
     /// # Errors
     /// - Will return [`DocError::ColumnNotFound`] if the expected table is not found
-    pub fn column(&self, column: &str) -> Result<&ColumnDoc, DocError> {
-        let matches = self
-            .columns
-            .iter()
-            .filter(|col_doc| col_doc.name() == column)
-            .collect::<Vec<&ColumnDoc>>();
-        match matches.as_slice() {
-            [] => Err(DocError::ColumnNotFound { name: column.to_owned() }),
-            [only] => Ok(*only),
-            _ => Err(DocError::DuplicateColumnsFound {
-                columns: matches.into_iter().cloned().collect(),
-            }),
-        }
+    pub fn column(&self, name: &str) -> Result<&ColumnDoc, DocError> {
+        self.columns().binary_search_by(|c| c.name().cmp(name)).map_or_else(|_| Err(DocError::ColumnNotFound { name: name.to_owned() }), |id| Ok(&self.columns()[id]))
     }
 
     /// Getter method for retrieving the table's [`Path`]
