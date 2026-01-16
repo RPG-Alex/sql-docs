@@ -2,7 +2,7 @@
 
 use std::{
     path::{Path, PathBuf},
-    str::FromStr,
+    str::FromStr, vec,
 };
 
 use crate::{
@@ -49,6 +49,7 @@ enum SqlFileDocSource<'a> {
     File(PathBuf),
     Files(Vec<PathBuf>),
     FromString(&'a str),
+    FromStringsWithPaths(&'a[(String, PathBuf)])
 }
 
 impl SqlDoc {
@@ -96,6 +97,17 @@ impl SqlDoc {
             multiline_flat: MultiFlatten::NoFlat,
         }
     }
+
+    /// Creates a builder from a vec of tuples containing the `sql` as [`String`] and the path as [`PathBuf`]
+    #[must_use]
+    pub const fn builder_from_strs_with_paths(string_with_path: &[(String, PathBuf)]) -> SqlDocBuilder<'_> {
+        SqlDocBuilder {
+            source: SqlFileDocSource::FromStringsWithPaths(string_with_path),
+            deny: Vec::new(),
+            multiline_flat: MultiFlatten::NoFlat
+        }
+    }
+    
 
     /// Method for finding a specific [`TableDoc`] by `name`
     ///
@@ -209,9 +221,10 @@ impl SqlDocBuilder<'_> {
                 vec![sql_doc]
             }
             SqlFileDocSource::FromString(content) => {
-                let sql_docs = generate_docs_str(content)?;
+                let sql_docs = generate_docs_str(content, None)?;
                 vec![sql_docs]
-            }
+            },
+            SqlFileDocSource::FromStringsWithPaths(strings_paths ) => generate_docs_from_strs_with_paths(strings_paths)?,
             SqlFileDocSource::Files(files) => generate_docs_from_files(files)?,
         };
         let num_of_tables = docs.iter().map(super::docs::SqlFileDoc::number_of_tables).sum();
@@ -269,7 +282,7 @@ fn generate_docs_from_dir<P: AsRef<Path>, S: AsRef<str>>(
     let deny_list: Vec<String> = deny.iter().map(|file| file.as_ref().to_owned()).collect();
     let file_set = SqlFilesList::new(source, &deny_list)?;
     let mut sql_docs = Vec::new();
-    for file in file_set.sql_files_sorted() {
+    for file in file_set.sql_files() {
         let docs = generate_docs_from_file(file)?;
         sql_docs.push(docs);
     }
@@ -293,11 +306,20 @@ fn generate_docs_from_file<P: AsRef<Path>>(source: P) -> Result<SqlFileDoc, DocE
     Ok(docs)
 }
 
-fn generate_docs_str(content: &str) -> Result<SqlFileDoc, DocError> {
-    let dummy_file = SqlFile::new_from_str(content.to_owned());
+fn generate_docs_str(content: &str, path: Option<PathBuf>) -> Result<SqlFileDoc, DocError> {
+    let dummy_file = SqlFile::new_from_str(content.to_owned(), path);
     let parsed_sql = ParsedSqlFile::parse(dummy_file)?;
     let comments = Comments::parse_all_comments_from_file(&parsed_sql)?;
     let docs = SqlFileDoc::from_parsed_file(&parsed_sql, &comments)?;
+    Ok(docs)
+}
+
+fn generate_docs_from_strs_with_paths(strings_with_paths: &[(String, PathBuf)]) -> Result<Vec<SqlFileDoc>, DocError> {
+    let mut docs = Vec::new();
+    for (content,path) in strings_with_paths {
+        docs.push(generate_docs_str(content, Some(path.to_owned()))?);
+    }
+
     Ok(docs)
 }
 

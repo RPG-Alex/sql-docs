@@ -63,17 +63,12 @@ impl SqlFilesList {
 
     /// Returns discovered `.sql` files in discovery order (filesystem-dependent).
     #[must_use]
-    pub fn sql_files(&self) -> &[PathBuf] {
-        &self.sql_files
-    }
-
-    /// Returns a sorted view of the discovered `.sql` files.
-    #[must_use]
-    pub fn sql_files_sorted(&self) -> Vec<&PathBuf> {
+    pub fn sql_files(&self) -> Vec<&PathBuf> {
         let mut files: Vec<&PathBuf> = self.sql_files.iter().collect();
         files.sort();
         files
     }
+
 }
 
 impl From<SqlFilesList> for Vec<PathBuf> {
@@ -116,10 +111,10 @@ impl SqlFile {
         Ok(Self { path: Some(path.to_owned()), content })
     }
 
-    /// Creates an [`SqlFile`] from a string with a dummy path
+    /// Creates an [`SqlFile`] from a a [`String`] and a [`Option<PathBuf>`]
     #[must_use]
-    pub const fn new_from_str(content: String) -> Self {
-        Self { path: None, content }
+    pub const fn new_from_str(content: String, path: Option<PathBuf>) -> Self {
+        Self { path, content }
     }
 
     /// Returns the filesystem path associated with this SQL file.
@@ -259,7 +254,7 @@ mod tests {
         let sql_file_list = SqlFilesList::new(&base, &[])?;
         let mut expected = vec![&file1, &file2];
         expected.sort();
-        assert_eq!(sql_file_list.sql_files_sorted(), expected);
+        assert_eq!(sql_file_list.sql_files(), expected);
         let _ = fs::remove_dir_all(&base);
 
         Ok(())
