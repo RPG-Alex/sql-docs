@@ -53,22 +53,22 @@ impl SqlFilesList {
     /// Returns an [`io::Error`] if directory traversal fails.
     pub fn new<P: AsRef<Path>>(path: P, deny_list: &[String]) -> io::Result<Self> {
         let recursive_scan = recursive_dir_scan(path.as_ref())?;
-        let allow_list = {
+        let mut allow_list: Vec<PathBuf> = {
             let deny = DenyList::new(deny_list);
             recursive_scan.into_iter().filter(|p| !deny.deny_files().contains(p)).collect()
         };
-
+        allow_list.sort();
         Ok(Self { sql_files: allow_list })
     }
 
     /// Returns discovered `.sql` files in discovery order (filesystem-dependent).
     #[must_use]
-    pub fn sql_files(&self) -> Vec<&PathBuf> {
-        let mut files: Vec<&PathBuf> = self.sql_files.iter().collect();
+    pub fn sql_files(&self) -> Vec<PathBuf> {
+        let mut files: Vec<PathBuf> =
+            self.sql_files.iter().map(std::borrow::ToOwned::to_owned).collect();
         files.sort();
         files
     }
-
 }
 
 impl From<SqlFilesList> for Vec<PathBuf> {
@@ -252,7 +252,7 @@ mod tests {
         fs::File::create(&non_sql1)?;
         fs::File::create(&non_sql2)?;
         let sql_file_list = SqlFilesList::new(&base, &[])?;
-        let mut expected = vec![&file1, &file2];
+        let mut expected = vec![file1, file2];
         expected.sort();
         assert_eq!(sql_file_list.sql_files(), expected);
         let _ = fs::remove_dir_all(&base);
@@ -309,8 +309,8 @@ mod tests {
         fs::File::create(&non_sql2)?;
         let deny_list = &[file1.to_string_lossy().to_string()];
         let sql_file_list = SqlFilesList::new(&base, deny_list)?;
-        let found = sql_file_list.sql_files_sorted();
-        let mut expected = vec![&file2];
+        let found = sql_file_list.sql_files();
+        let mut expected = vec![file2];
         expected.sort();
         assert_eq!(found, expected);
         let _ = fs::remove_dir_all(&base);
@@ -352,7 +352,7 @@ mod tests {
         fs::File::create(&file2)?;
         fs::File::create(&noise)?;
         let sql_file_list = SqlFilesList::new(&base, &[])?;
-        let expected: Vec<PathBuf> = sql_file_list.sql_files().to_vec();
+        let expected: Vec<PathBuf> = sql_file_list.sql_files();
         let got: Vec<PathBuf> = Vec::from(sql_file_list);
         assert_eq!(got, expected);
         let _ = fs::remove_dir_all(&base);
@@ -360,8 +360,8 @@ mod tests {
     }
     #[test]
     fn test_sql_file_new_from_str_has_no_path_and_preserves_content() {
-        let sql = "SELECT * FROM users;".to_owned();
-        let file = SqlFile::new_from_str(sql.clone());
+        let sql = "SELECT * FROM users;";
+        let file = SqlFile::new_from_str(sql.to_owned(), None);
         assert!(file.path().is_none());
         assert!(file.path_into_path_buf().is_none());
         assert_eq!(file.content(), sql);

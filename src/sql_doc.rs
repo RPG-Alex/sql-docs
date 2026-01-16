@@ -2,7 +2,8 @@
 
 use std::{
     path::{Path, PathBuf},
-    str::FromStr, vec,
+    str::FromStr,
+    vec,
 };
 
 use crate::{
@@ -49,7 +50,7 @@ enum SqlFileDocSource<'a> {
     File(PathBuf),
     Files(Vec<PathBuf>),
     FromString(&'a str),
-    FromStringsWithPaths(&'a[(String, PathBuf)])
+    FromStringsWithPaths(&'a [(String, PathBuf)]),
 }
 
 impl SqlDoc {
@@ -100,14 +101,15 @@ impl SqlDoc {
 
     /// Creates a builder from a vec of tuples containing the `sql` as [`String`] and the path as [`PathBuf`]
     #[must_use]
-    pub const fn builder_from_strs_with_paths(string_with_path: &[(String, PathBuf)]) -> SqlDocBuilder<'_> {
+    pub const fn builder_from_strs_with_paths(
+        string_with_path: &[(String, PathBuf)],
+    ) -> SqlDocBuilder<'_> {
         SqlDocBuilder {
             source: SqlFileDocSource::FromStringsWithPaths(string_with_path),
             deny: Vec::new(),
-            multiline_flat: MultiFlatten::NoFlat
+            multiline_flat: MultiFlatten::NoFlat,
         }
     }
-    
 
     /// Method for finding a specific [`TableDoc`] by `name`
     ///
@@ -223,8 +225,10 @@ impl SqlDocBuilder<'_> {
             SqlFileDocSource::FromString(content) => {
                 let sql_docs = generate_docs_str(content, None)?;
                 vec![sql_docs]
-            },
-            SqlFileDocSource::FromStringsWithPaths(strings_paths ) => generate_docs_from_strs_with_paths(strings_paths)?,
+            }
+            SqlFileDocSource::FromStringsWithPaths(strings_paths) => {
+                generate_docs_from_strs_with_paths(strings_paths)?
+            }
             SqlFileDocSource::Files(files) => generate_docs_from_files(files)?,
         };
         let num_of_tables = docs.iter().map(super::docs::SqlFileDoc::number_of_tables).sum();
@@ -314,9 +318,11 @@ fn generate_docs_str(content: &str, path: Option<PathBuf>) -> Result<SqlFileDoc,
     Ok(docs)
 }
 
-fn generate_docs_from_strs_with_paths(strings_with_paths: &[(String, PathBuf)]) -> Result<Vec<SqlFileDoc>, DocError> {
+fn generate_docs_from_strs_with_paths(
+    strings_with_paths: &[(String, PathBuf)],
+) -> Result<Vec<SqlFileDoc>, DocError> {
     let mut docs = Vec::new();
-    for (content,path) in strings_with_paths {
+    for (content, path) in strings_with_paths {
         docs.push(generate_docs_str(content, Some(path.to_owned()))?);
     }
 
@@ -837,4 +843,100 @@ mod tests {
         assert_eq!(t.schema(), Some("public"));
         Ok(())
     }
+    #[test]
+    fn test_generate_docs_from_strs_with_paths_builds_tables_and_stamps_paths()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Two simple SQL strings with distinct paths
+        let sql1 = r#"
+            -- Users table
+            CREATE TABLE users (
+                -- id
+                id INTEGER PRIMARY KEY
+            );
+        "#;
+
+        let sql2 = r#"
+            /* Posts table */
+            CREATE TABLE posts (
+                /* primary key */
+                id INTEGER PRIMARY KEY
+            );
+        "#;
+
+        let p1 = PathBuf::from("a/one.sql");
+        let p2 = PathBuf::from("b/two.sql");
+
+        // NOTE: builder expects owned String for sql and a PathBuf
+        let inputs: Vec<(String, PathBuf)> =
+            vec![(sql1.to_owned(), p1.clone()), (sql2.to_owned(), p2.clone())];
+
+        // Build via the new builder arm
+        let doc = SqlDoc::builder_from_strs_with_paths(&inputs).build()?;
+
+        // We should have 2 tables total
+        assert_eq!(doc.tables().len(), 2);
+
+        // Verify table names exist
+        let users = doc.table("users", None)?;
+        let posts = doc.table("posts", None)?;
+
+        // Verify each table got the correct stamped path
+        assert_eq!(users.path(), Some(p1.as_path()));
+        assert_eq!(posts.path(), Some(p2.as_path()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_builder_from_strs_with_paths_is_used_in_build_match_arm()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let sql_a = "CREATE TABLE alpha (id INTEGER);";
+        let sql_b = "CREATE TABLE beta (id INTEGER);";
+        let path_a = PathBuf::from("alpha.sql");
+        let path_b = PathBuf::from("beta.sql");
+
+        let inputs = vec![(sql_a.to_owned(), path_a.clone()), (sql_b.to_owned(), path_b.clone())];
+
+        let built = SqlDoc::builder_from_strs_with_paths(&inputs).build()?;
+
+        let names: Vec<&str> = built.tables().iter().map(|t| t.name()).collect();
+        assert_eq!(names, vec!["alpha", "beta"]);
+
+        assert_eq!(built.table("alpha", None)?.path(), Some(path_a.as_path()));
+        assert_eq!(built.table("beta", None)?.path(), Some(path_b.as_path()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_builder_from_str_no_path_has_none_path() -> Result<(), Box<dyn std::error::Error>> {
+        let sql = "CREATE TABLE t (id INTEGER);";
+        let built = SqlDoc::builder_from_str(sql).build()?;
+
+        let t = built.table("t", None)?;
+        assert_eq!(t.path(), None);
+
+        Ok(())
+    }
+    #[test]
+fn test_table_with_schema_not_found_uses_no_schema_provided_message() {
+    use crate::{SqlDoc, docs::TableDoc, error::DocError};
+
+    let sql_doc = SqlDoc::new(vec![
+        TableDoc::new(Some("analytics".to_owned()), "events".to_owned(), None, vec![], None),
+        TableDoc::new(Some("public".to_owned()), "events".to_owned(), None, vec![], None),
+    ]);
+
+    match sql_doc.table("events", None) {
+        Err(DocError::TableWithSchemaNotFound { name, schema }) => {
+            assert_eq!(name, "events");
+            assert_eq!(schema, "No schema provided");
+        }
+        Err(e) => panic!(
+            "expected TableWithSchemaNotFound with 'No schema provided', got: {e:?}"
+        ),
+        Ok(_) => panic!("expected error, got Ok"),
+    }
+}
+
 }
