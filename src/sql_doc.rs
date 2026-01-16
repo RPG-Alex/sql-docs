@@ -847,21 +847,21 @@ mod tests {
     fn test_generate_docs_from_strs_with_paths_builds_tables_and_stamps_paths()
     -> Result<(), Box<dyn std::error::Error>> {
         // Two simple SQL strings with distinct paths
-        let sql1 = r#"
+        let sql1 = "
             -- Users table
             CREATE TABLE users (
                 -- id
                 id INTEGER PRIMARY KEY
             );
-        "#;
+        ";
 
-        let sql2 = r#"
+        let sql2 = "
             /* Posts table */
             CREATE TABLE posts (
                 /* primary key */
                 id INTEGER PRIMARY KEY
             );
-        "#;
+        ";
 
         let p1 = PathBuf::from("a/one.sql");
         let p2 = PathBuf::from("b/two.sql");
@@ -899,7 +899,8 @@ mod tests {
 
         let built = SqlDoc::builder_from_strs_with_paths(&inputs).build()?;
 
-        let names: Vec<&str> = built.tables().iter().map(|t| t.name()).collect();
+        let names: Vec<&str> =
+            built.tables().iter().map(super::super::docs::TableDoc::name).collect();
         assert_eq!(names, vec!["alpha", "beta"]);
 
         assert_eq!(built.table("alpha", None)?.path(), Some(path_a.as_path()));
@@ -919,24 +920,23 @@ mod tests {
         Ok(())
     }
     #[test]
-fn test_table_with_schema_not_found_uses_no_schema_provided_message() {
-    use crate::{SqlDoc, docs::TableDoc, error::DocError};
+    fn test_table_with_schema_not_found_uses_no_schema_provided_message() {
+        use crate::{SqlDoc, docs::TableDoc, error::DocError};
 
-    let sql_doc = SqlDoc::new(vec![
-        TableDoc::new(Some("analytics".to_owned()), "events".to_owned(), None, vec![], None),
-        TableDoc::new(Some("public".to_owned()), "events".to_owned(), None, vec![], None),
-    ]);
+        let sql_doc = SqlDoc::new(vec![
+            TableDoc::new(Some("analytics".to_owned()), "events".to_owned(), None, vec![], None),
+            TableDoc::new(Some("public".to_owned()), "events".to_owned(), None, vec![], None),
+        ]);
 
-    match sql_doc.table("events", None) {
-        Err(DocError::TableWithSchemaNotFound { name, schema }) => {
-            assert_eq!(name, "events");
-            assert_eq!(schema, "No schema provided");
+        match sql_doc.table("events", None) {
+            Err(DocError::TableWithSchemaNotFound { name, schema }) => {
+                assert_eq!(name, "events");
+                assert_eq!(schema, "No schema provided");
+            }
+            Err(e) => {
+                panic!("expected TableWithSchemaNotFound with 'No schema provided', got: {e:?}")
+            }
+            Ok(_) => panic!("expected error, got Ok"),
         }
-        Err(e) => panic!(
-            "expected TableWithSchemaNotFound with 'No schema provided', got: {e:?}"
-        ),
-        Ok(_) => panic!("expected error, got Ok"),
     }
-}
-
 }
