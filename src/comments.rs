@@ -140,6 +140,24 @@ impl Comment {
     pub fn text(&self) -> &str {
         self.kind().comment()
     }
+
+    /// Set the [`CommentKind`] for the comment
+    pub fn set_kind(&mut self, kind: CommentKind) -> &mut Self {
+        self.kind = kind;
+        self
+    }
+
+    /// Sets new [`Span`] locations for the comment
+    pub const fn set_span_locations(&mut self, start: Location, end: Location) -> &mut Self {
+        self.span = Span::new(start, end);
+        self
+    }
+}
+
+impl Default for Comment {
+    fn default() -> Self {
+        Self { kind: CommentKind::SingleLine(String::new()), span: Span::default() }
+    }
 }
 
 /// Enum for returning errors withe Comment parsing
@@ -361,6 +379,21 @@ impl Comments {
     pub fn leading_comment(&self, line: u64) -> Option<&Comment> {
         self.comments().iter().rev().find(|comment| comment.span().end().line() + 1 == line)
     }
+}
+
+fn combine_leading_comments(comments: &Comments, line: u64) -> Comment {
+    let mut comment: Comment = Comment::default();
+    let mut content = String::new();
+    let mut span = Span::default();
+    for possible_comment in comments.comments() {
+        if possible_comment.span().end().line() < line {
+            comment.set_kind(CommentKind::SingleLine(
+                comment.text().to_owned() + possible_comment.text(),
+            ));
+        }
+    }
+
+    comment
 }
 
 #[cfg(test)]
