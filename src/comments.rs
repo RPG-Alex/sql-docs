@@ -102,6 +102,14 @@ impl CommentKind {
             Self::MultiLine(comment) | Self::SingleLine(comment) => comment,
         }
     }
+    /// Setter method for setting the comment value
+    pub fn set_comment(&mut self, text: &str) {
+        match self {
+            Self::MultiLine(s) | Self::SingleLine(s) => {
+                *s = text.to_owned();
+            }
+        }
+    }
 }
 
 /// Structure for containing the [`CommentKind`] and the [`Span`] for a comment
