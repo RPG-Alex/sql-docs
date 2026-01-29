@@ -84,38 +84,12 @@ impl Default for Span {
     }
 }
 
-/// Enum for holding the comment content, differentiated by single line `--` and
-/// multiline `/* */`
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum CommentKind {
-    /// Enum variant for Multiline Comments
-    MultiLine(String),
-    /// Enum variant for Single Line Comments
-    SingleLine(String),
-}
-
-impl CommentKind {
-    /// Getter for returning the comment from within the enum
-    #[must_use]
-    pub fn comment(&self) -> &str {
-        match self {
-            Self::MultiLine(comment) | Self::SingleLine(comment) => comment,
-        }
-    }
-    /// Setter method for setting the comment value
-    pub fn set_comment(&mut self, text: &str) {
-        match self {
-            Self::MultiLine(s) | Self::SingleLine(s) => {
-                *s = text.to_owned();
-            }
-        }
-    }
-}
-
-/// Structure for containing the [`CommentKind`] and the [`Span`] for a comment
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// Structure for containing the comment, location and style
+#[derive(Clone, Default, Debug, Eq, PartialEq)]
 pub struct Comment {
-    kind: CommentKind,
+    /// The comment content found as a [`String`]
+    text: String,
+    /// The location of the comment start/finish as a [`Span`]
     span: Span,
 }
 
@@ -123,17 +97,11 @@ impl Comment {
     /// Method for making a new comment
     ///
     /// # Parameters
-    /// - `kind` where the type of comment is passed as a [`CommentKind`]
+    /// - `text` the text of the comment as a [`String`]
     /// - `span` where the [`Span`] of the comment is passed
     #[must_use]
-    pub const fn new(kind: CommentKind, span: Span) -> Self {
-        Self { kind, span }
-    }
-
-    /// Getter method to get the [`CommentKind`]
-    #[must_use]
-    pub const fn kind(&self) -> &CommentKind {
-        &self.kind
+    pub const fn new(text: String, span: Span) -> Self {
+        Self { text, span }
     }
 
     /// Getter method to get the [`Span`] of the comment
@@ -142,29 +110,25 @@ impl Comment {
         &self.span
     }
 
-    /// Getter method that will return the comment content as a [`str`],
-    /// regardless of [`CommentKind`]
+    /// Getter method that will return the comment content as a &[`str`]
     #[must_use]
     pub fn text(&self) -> &str {
-        self.kind().comment()
+        &self.text
     }
 
-    /// Set the [`CommentKind`] for the comment
-    pub fn set_kind(&mut self, kind: CommentKind) -> &mut Self {
-        self.kind = kind;
-        self
+    /// Setter for text of comment
+    pub fn set_text(&mut self, text: impl Into<String>) {
+        self.text = text.into();
+    }
+
+    /// Mutator method to update comment text
+    pub(crate) const fn text_mut(&mut self) -> &mut String {
+        &mut self.text
     }
 
     /// Sets new [`Span`] locations for the comment
-    pub const fn set_span_locations(&mut self, start: Location, end: Location) -> &mut Self {
+    pub const fn set_span_locations(&mut self, start: Location, end: Location) {
         self.span = Span::new(start, end);
-        self
-    }
-}
-
-impl Default for Comment {
-    fn default() -> Self {
-        Self { kind: CommentKind::SingleLine(String::new()), span: Span::default() }
     }
 }
 
@@ -325,7 +289,7 @@ impl Comments {
                                 })
                                 .collect();
                             comments.push(Comment::new(
-                                CommentKind::MultiLine(normalized_comment),
+                                normalized_comment,
                                 Span::new(
                                     Location { line: start_line, column: start_col },
                                     end_loc,
@@ -352,7 +316,7 @@ impl Comments {
                 in_single = false;
                 let end_loc = Location::new(line_num, col);
                 comments.push(Comment::new(
-                    CommentKind::SingleLine(buf.trim().to_owned()),
+                    buf.trim().to_owned(),
                     Span::new(Location { line: start_line, column: start_col }, end_loc),
                 ));
                 buf.clear();
@@ -387,59 +351,13 @@ impl Comments {
     pub fn leading_comment(&self, line: u64) -> Option<&Comment> {
         self.comments().iter().rev().find(|comment| comment.span().end().line() + 1 == line)
     }
-
-    /// Method for retrieving all comments that occur directly before a specified line
-    ///
-    /// # Parameters
-    /// - `self` the current [`Comments`] object
-    /// - The `line` as a [`u64`] to use for reference
-    pub fn all_valid_leading_comments(&self, line: u64) -> Vec<&Comment> {
-        let mut found_comments = Vec::new();
-        let mut current_line = match line.checked_sub(1) {
-            Some(n) => n,
-            None => return found_comments,
-        };
-        for comment in self.comments().iter().rev() {
-            let start = comment.span().end().line();
-            let end = comment.span().end().line();
-            if end == current_line {
-                found_comments.push(comment);
-                if current_line == 0 {
-                    break;
-                }
-                current_line = start.saturating_sub(1);
-            } else if comment.span().end().line() < line {
-                break;
-            }
-        }
-        found_comments.reverse();
-        found_comments
-    }
-}
-
-fn combine_leading_comments(comments: Vec<&Comment>) -> Comment {
-    let mut final_comment: Comment = Comment::default();
-    let kind = comments[0].kind();
-    final_comment.set_kind(kind.clone());
-    let mut content = String::new();
-    let start = comments[0].span().start();
-    let mut end = Location::default();
-    for comment in comments.iter().rev() {
-        end = *comment.span().end();
-        content.push_str(comment.text());
-    }
-
-    final_comment.kind.set_comment(&content);
-    final_comment.set_span_locations(start.to_owned(), end);
-
-    final_comment
 }
 
 #[cfg(test)]
 mod tests {
     use std::{env, fs};
 
-    use crate::comments::{Comment, CommentError, CommentKind, Comments, Location, Span};
+    use crate::comments::{Comment, CommentError, Comments, Location, Span};
 
     #[test]
     fn location_new_and_default() {
@@ -470,13 +388,13 @@ mod tests {
         let raw_comment = "-- a comment";
         let len = raw_comment.len() as u64;
 
-        let singleline = CommentKind::SingleLine(raw_comment.to_owned());
+        let singleline = raw_comment.to_owned();
         let mut span = Span::default();
         span.end.column = len - 1;
 
         let comment = Comment::new(singleline.clone(), span);
 
-        assert_eq!(comment.kind, singleline);
+        assert_eq!(comment.text(), singleline);
 
         let expected_span =
             Span::new(Location { line: 1, column: 1 }, Location { line: 1, column: len - 1 });
@@ -486,12 +404,12 @@ mod tests {
 
     #[test]
     fn multiline_comment_span() {
-        let kind = CommentKind::MultiLine("/* hello world */".to_owned());
+        let text = "/* hello world */".to_owned();
         let span = Span::new(Location { line: 1, column: 1 }, Location { line: 2, column: 9 });
 
-        let comment = Comment::new(kind.clone(), span);
+        let comment = Comment::new(text.clone(), span);
 
-        assert_eq!(comment.kind, kind);
+        assert_eq!(comment.text(), text);
         assert_eq!(comment.span.start.line, 1);
         assert_eq!(comment.span.end.line, 2);
     }
@@ -561,7 +479,7 @@ mod tests {
         );
 
         for (i, comment) in comments.iter().enumerate() {
-            assert_eq!(expected[i], comment.kind().comment(), "comment at index {i} did not match");
+            assert_eq!(expected[i], comment.text(), "comment at index {i} did not match");
         }
     }
 
@@ -755,11 +673,11 @@ CREATE TABLE posts (
         let comments = comments.comments();
         assert_eq!(comments.len(), 11);
         let first = &comments[0];
-        assert_eq!(first.kind().comment(), "Users table stores user account information");
+        assert_eq!(first.text(), "Users table stores user account information");
         assert_eq!(first.span().start(), &Location::new(1, 1));
         assert_eq!(first.span().end(), &Location::new(1, 47));
         let primary_key = &comments[1];
-        assert_eq!(primary_key.kind().comment(), "Primary key");
+        assert_eq!(primary_key.text(), "Primary key");
         assert_eq!(primary_key.span().start(), &Location::new(3, 5));
         assert_eq!(primary_key.span().end(), &Location::new(3, 19));
         assert!(
@@ -793,10 +711,7 @@ CREATE TABLE posts (
         let comments = comments.comments();
         assert_eq!(comments.len(), 11);
         let first = &comments[0];
-        assert_eq!(
-            first.kind().comment(),
-            "Users table stores user account information\nmultiline"
-        );
+        assert_eq!(first.text(), "Users table stores user account information\nmultiline");
         assert_eq!(first.span().start(), &Location::new(1, 1));
         assert_eq!(first.span().end().line(), 2);
         assert!(
@@ -804,7 +719,7 @@ CREATE TABLE posts (
             "end column should be after start column for first multiline comment",
         );
         let primary_key = &comments[1];
-        assert_eq!(primary_key.kind().comment(), "Primary key\nmultiline");
+        assert_eq!(primary_key.text(), "Primary key\nmultiline");
         assert_eq!(primary_key.span().start(), &Location::new(4, 5));
         assert_eq!(primary_key.span().end().line(), 5);
         assert!(
@@ -832,11 +747,11 @@ CREATE TABLE posts (
     fn test_comments() {
         let comment_vec = vec![
             Comment::new(
-                CommentKind::SingleLine("a comment".to_owned()),
+                "a comment".to_owned(),
                 Span { start: Location::new(1, 1), end: Location::new(1, 12) },
             ),
             Comment::new(
-                CommentKind::SingleLine("a second comment".to_owned()),
+                "a second comment".to_owned(),
                 Span { start: Location::new(1, 1), end: Location::new(2, 19) },
             ),
         ];
@@ -844,44 +759,9 @@ CREATE TABLE posts (
         let comments = Comments::new(comment_vec.clone());
         assert!(comments.comments().len() == length);
         for (i, comment) in comments.comments().iter().enumerate() {
-            assert_eq!(comment.kind().comment(), comment_vec[i].kind().comment());
+            assert_eq!(comment.text(), comment_vec[i].text());
             assert_eq!(comment.span().start(), comment_vec[i].span().start());
             assert_eq!(comment.span().end(), comment_vec[i].span().end());
         }
-    }
-
-    #[test]
-    fn test_all_valid_leading_comments() {
-        // Lines:
-        // 1: -- old
-        // 2:
-        // 3: -- a
-        // 4: -- b
-        // 5: implied statement
-        let comment_vec = vec![
-            Comment::new(
-                CommentKind::SingleLine("old".to_owned()),
-                Span::new(Location::new(1, 1), Location::new(1, 6)),
-            ),
-            Comment::new(
-                CommentKind::SingleLine("a".to_owned()),
-                Span::new(Location::new(3, 1), Location::new(3, 4)),
-            ),
-            Comment::new(
-                CommentKind::SingleLine("b".to_owned()),
-                Span::new(Location::new(4, 1), Location::new(4, 4)),
-            ),
-        ];
-
-        let comments = Comments::new(comment_vec);
-
-        let leading = comments.all_valid_leading_comments(5);
-
-        assert_eq!(leading.len(), 2);
-        assert_eq!(leading[0].text(), "a");
-        assert_eq!(leading[1].text(), "b");
-
-        assert_eq!(leading[0].span().start().line(), 3);
-        assert_eq!(leading[1].span().end().line(), 4);
     }
 }
