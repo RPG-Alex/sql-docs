@@ -881,7 +881,6 @@ CREATE TABLE posts (
         assert_eq!(leading[0].text(), "a");
         assert_eq!(leading[1].text(), "b");
 
-        // Also confirm the spans align to those lines.
         assert_eq!(leading[0].span().start().line(), 3);
         assert_eq!(leading[1].span().end().line(), 4);
     }
