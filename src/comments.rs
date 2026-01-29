@@ -873,10 +873,8 @@ CREATE TABLE posts (
             ),
         ];
 
-        // IMPORTANT: use Comments::new to enforce ordering invariants
         let comments = Comments::new(comment_vec);
 
-        // Statement is on line 5; leading comment block should be lines 3-4 only.
         let leading = comments.all_valid_leading_comments(5);
 
         assert_eq!(leading.len(), 2);
