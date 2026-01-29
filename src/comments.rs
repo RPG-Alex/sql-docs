@@ -246,7 +246,16 @@ impl Comments {
         for line in src.lines() {
             col = 1;
             let mut chars = line.chars().peekable();
+
+            let t = line.trim_start();
+            let starts_comment = t.starts_with("--") || t.starts_with("/*");
+            if !(starts_comment) {
+                buf.clear();
+            }
+
+
             while let Some(c) = chars.next() {
+
                 match (in_single, in_multi, c) {
                     (false, false, '-') => {
                         if chars.peek().copied() == Some('-') {
