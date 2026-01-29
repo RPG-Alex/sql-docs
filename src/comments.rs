@@ -253,9 +253,7 @@ impl Comments {
                 buf.clear();
             }
 
-
             while let Some(c) = chars.next() {
-
                 match (in_single, in_multi, c) {
                     (false, false, '-') => {
                         if chars.peek().copied() == Some('-') {
@@ -445,7 +443,13 @@ mod tests {
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
 
         for file in parsed_set.files() {
-            let parsed_comments = Comments::parse_all_comments_from_file(file)?;
+            let parsed_comments = Comments::parse_all_comments_from_file(file).map_err(|e| {
+                format!(
+                    "parse_all_comments_from_file failed for file {:?}: {e}",
+                    file.file().path()
+                )
+            })?;
+
             let filename = file
                 .file()
                 .path()
