@@ -10,7 +10,7 @@ use std::fmt;
 use crate::ast::ParsedSqlFile;
 
 /// Represents a line/column location within a source file.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub struct Location {
     line: u64,
     column: u64,
@@ -387,21 +387,52 @@ impl Comments {
     pub fn leading_comment(&self, line: u64) -> Option<&Comment> {
         self.comments().iter().rev().find(|comment| comment.span().end().line() + 1 == line)
     }
+
+    /// Method for retrieving all comments that occur directly before a specified line
+    ///
+    /// # Parameters
+    /// - `self` the current [`Comments`] object
+    /// - The `line` as a [`u64`] to use for reference
+    pub fn all_valid_leading_comments(&self, line: u64) -> Vec<&Comment> {
+        let mut found_comments = Vec::new();
+        let mut current_line = match line.checked_sub(1) {
+            Some(n) => n,
+            None => return found_comments,
+        };
+        for comment in self.comments().iter().rev() {
+            let start = comment.span().end().line();
+            let end = comment.span().end().line();
+            if end == current_line {
+                found_comments.push(comment);
+                if current_line == 0 {
+                    break;
+                }
+                current_line = start.saturating_sub(1);
+            } else if comment.span().end().line() < line {
+                break;
+            }
+        }
+        found_comments.reverse();
+        found_comments
+    }
 }
 
-fn combine_leading_comments(comments: &Comments, line: u64) -> Comment {
-    let mut comment: Comment = Comment::default();
+fn combine_leading_comments(comments: Vec<&Comment>) -> Comment {
+    let mut final_comment: Comment = Comment::default();
+    let kind = comments[0].kind();
+    final_comment.set_kind(kind.clone());
     let mut content = String::new();
-    let mut span = Span::default();
-    for possible_comment in comments.comments() {
-        if possible_comment.span().end().line() < line {
-            comment.set_kind(CommentKind::SingleLine(
-                comment.text().to_owned() + possible_comment.text(),
-            ));
-        }
+    let start = comments[0].span().start();
+    let mut end = Location::default();
+    for comment in comments.iter().rev() {
+        end = *comment.span().end();
+        content.push_str(comment.text());
     }
 
-    comment
+    final_comment.kind.set_comment(&content);
+    final_comment.set_span_locations(start.to_owned(), end);
+
+    final_comment
 }
 
 #[cfg(test)]
@@ -817,5 +848,43 @@ CREATE TABLE posts (
             assert_eq!(comment.span().start(), comment_vec[i].span().start());
             assert_eq!(comment.span().end(), comment_vec[i].span().end());
         }
+    }
+
+    #[test]
+    fn test_all_valid_leading_comments() {
+        // Lines:
+        // 1: -- old
+        // 2:
+        // 3: -- a
+        // 4: -- b
+        // 5: implied statement
+        let comment_vec = vec![
+            Comment::new(
+                CommentKind::SingleLine("old".to_owned()),
+                Span::new(Location::new(1, 1), Location::new(1, 6)),
+            ),
+            Comment::new(
+                CommentKind::SingleLine("a".to_owned()),
+                Span::new(Location::new(3, 1), Location::new(3, 4)),
+            ),
+            Comment::new(
+                CommentKind::SingleLine("b".to_owned()),
+                Span::new(Location::new(4, 1), Location::new(4, 4)),
+            ),
+        ];
+
+        // IMPORTANT: use Comments::new to enforce ordering invariants
+        let comments = Comments::new(comment_vec);
+
+        // Statement is on line 5; leading comment block should be lines 3-4 only.
+        let leading = comments.all_valid_leading_comments(5);
+
+        assert_eq!(leading.len(), 2);
+        assert_eq!(leading[0].text(), "a");
+        assert_eq!(leading[1].text(), "b");
+
+        // Also confirm the spans align to those lines.
+        assert_eq!(leading[0].span().start().line(), 3);
+        assert_eq!(leading[1].span().end().line(), 4);
     }
 }
