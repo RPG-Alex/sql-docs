@@ -313,7 +313,7 @@ impl Comments {
                     buf.push('\n');
                 } else {
                     comments.push(Comment::new(
-                        buf.trim().replace("\n ", "\n").to_owned(),
+                        buf.trim().replace("\n ", "\n"),
                         Span::new(
                             Location { line: start_line, column: start_col },
                             Location::new(line_num, col),
