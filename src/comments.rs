@@ -10,7 +10,7 @@ use std::fmt;
 use crate::ast::ParsedSqlFile;
 
 /// Represents a line/column location within a source file.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub struct Location {
     line: u64,
     column: u64,
@@ -47,7 +47,7 @@ impl Default for Location {
 }
 
 /// Represents a start/end span (inclusive/exclusive as used by this crate) for a comment in a file.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Span {
     start: Location,
     end: Location,
@@ -361,35 +361,62 @@ impl Comments {
     /// - An `u64` value representing the desired line to check above.
     /// - [`LeadingCommentCapture`] preference
     #[must_use]
-    pub fn leading_comments(&self, line: u64, capture: &LeadingCommentCapture) -> Vec<&Comment> {
-        let mut comments = Vec::new();
+    pub fn leading_comments(&self, line: u64, capture: LeadingCommentCapture) -> Self {
+        let mut comments: Vec<Comment> = Vec::new();
         let mut current_line = line;
         let mut seen_multiline = false;
         while let Some(leading_comment) = self.leading_comment(current_line) {
             match capture {
                 LeadingCommentCapture::SingleNearest => {
-                    comments.push(leading_comment);
+                    comments.push(leading_comment.to_owned());
                     break;
                 }
-                LeadingCommentCapture::AllLeading => comments.push(leading_comment),
+                LeadingCommentCapture::AllLeading => comments.push(leading_comment.to_owned()),
                 LeadingCommentCapture::AllSingleOneMulti => match leading_comment.kind() {
                     CommentKind::MultiLine if seen_multiline => break,
                     CommentKind::MultiLine => {
                         seen_multiline = true;
-                        comments.push(leading_comment);
+                        comments.push(leading_comment.to_owned());
                     }
-                    CommentKind::SingleLine => comments.push(leading_comment),
+                    CommentKind::SingleLine => comments.push(leading_comment.to_owned()),
                 },
             }
             current_line = leading_comment.span().start().line();
         }
         comments.reverse();
-        comments
+        Self::new(comments)
+    }
+
+    /// Collapse this collection separate with `\n` into a single a single comment.
+    #[must_use]
+    pub fn collapse_comments(self) -> Option<Comment> {
+        let mut iter = self.comments.into_iter();
+        let first = iter.next()?;
+
+        let Some(second) = iter.next() else {
+            return Some(first);
+        };
+
+        let start = *first.span().start();
+
+        let mut text = first.text().to_owned();
+        text.push('\n');
+        text.push_str(second.text());
+
+        let mut end = *second.span().end();
+
+        for c in iter {
+            text.push('\n');
+            text.push_str(c.text());
+            end = *c.span().end();
+        }
+
+        Some(Comment::new(text, CommentKind::MultiLine, Span::new(start, end)))
     }
 }
 
 /// Controls how leading comments are captured for a statement.
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
 pub enum LeadingCommentCapture {
     /// Capture only the single nearest leading comment.
     #[default]
@@ -816,8 +843,8 @@ CREATE TABLE posts (
 
     use crate::comments::LeadingCommentCapture;
 
-    fn texts(v: Vec<&Comment>) -> Vec<String> {
-        v.into_iter().map(|c| c.text().to_owned()).collect()
+    fn texts(v: &Comments) -> Vec<String> {
+        v.comments().iter().map(|c| c.text().to_owned()).collect()
     }
 
     #[test]
@@ -837,11 +864,11 @@ CREATE TABLE posts (
 CREATE TABLE t (id INTEGER);
 ";
         let parsed = Comments::scan_comments(src)?;
-        let single = parsed.leading_comments(3, &LeadingCommentCapture::SingleNearest);
-        assert_eq!(texts(single), vec!["c2".to_owned()]);
+        let single = parsed.leading_comments(3, LeadingCommentCapture::SingleNearest);
+        assert_eq!(texts(&single), vec!["c2".to_owned()]);
 
-        let all = parsed.leading_comments(3, &LeadingCommentCapture::AllLeading);
-        assert_eq!(texts(all), vec!["c1".to_owned(), "c2".to_owned()]);
+        let all = parsed.leading_comments(3, LeadingCommentCapture::AllLeading);
+        assert_eq!(texts(&all), vec!["c1".to_owned(), "c2".to_owned()]);
 
         Ok(())
     }
@@ -856,8 +883,8 @@ CREATE TABLE t (id INTEGER);
 CREATE TABLE t (id INTEGER);
 ";
         let parsed = Comments::scan_comments(src)?;
-        let all = parsed.leading_comments(4, &LeadingCommentCapture::AllLeading);
-        assert_eq!(texts(all), vec!["c2".to_owned()]);
+        let all = parsed.leading_comments(4, LeadingCommentCapture::AllLeading);
+        assert_eq!(texts(&all), vec!["c2".to_owned()]);
 
         Ok(())
     }
@@ -873,8 +900,8 @@ m */
 CREATE TABLE t (id INTEGER);
 ";
         let parsed = Comments::scan_comments(src)?;
-        let got = parsed.leading_comments(5, &LeadingCommentCapture::AllSingleOneMulti);
-        assert_eq!(texts(got), vec!["m\nm".to_owned(), "s1".to_owned(), "s2".to_owned(),]);
+        let got = parsed.leading_comments(5, LeadingCommentCapture::AllSingleOneMulti);
+        assert_eq!(texts(&got), vec!["m\nm".to_owned(), "s1".to_owned(), "s2".to_owned(),]);
 
         Ok(())
     }
@@ -889,8 +916,8 @@ CREATE TABLE t (id INTEGER);
 CREATE TABLE t (id INTEGER);
 ";
         let parsed = Comments::scan_comments(src)?;
-        let got = parsed.leading_comments(4, &LeadingCommentCapture::AllSingleOneMulti);
-        assert_eq!(texts(got), vec!["m2".to_owned(), "s1".to_owned()]);
+        let got = parsed.leading_comments(4, LeadingCommentCapture::AllSingleOneMulti);
+        assert_eq!(texts(&got), vec!["m2".to_owned(), "s1".to_owned()]);
 
         Ok(())
     }
@@ -904,8 +931,99 @@ world */
 CREATE TABLE t (id INTEGER);
 ";
         let parsed = Comments::scan_comments(src)?;
-        let got = parsed.leading_comments(3, &LeadingCommentCapture::SingleNearest);
-        assert_eq!(texts(got), vec!["hello\nworld".to_owned()]);
+        let got = parsed.leading_comments(3, LeadingCommentCapture::SingleNearest);
+        assert_eq!(texts(&got), vec!["hello\nworld".to_owned()]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn collapse_comments_empty_returns_none() {
+        let comments = Comments::new(vec![]);
+        assert!(comments.collapse_comments().is_none());
+    }
+
+    #[test]
+    fn collapse_comments_single_returns_same_comment() {
+        let c = Comment::new(
+            "solo".to_owned(),
+            CommentKind::SingleLine,
+            Span::new(Location::new(10, 3), Location::new(10, 11)),
+        );
+        let comments = Comments::new(vec![c]);
+
+        let collapsed =
+            comments.collapse_comments().unwrap_or_else(|| panic!("should return a comment"));
+        assert_eq!(collapsed.text(), "solo");
+        assert_eq!(collapsed.kind(), &CommentKind::SingleLine);
+        assert_eq!(collapsed.span(), &Span::new(Location::new(10, 3), Location::new(10, 11)));
+    }
+
+    #[test]
+    fn collapse_comments_multiple_joins_text_and_expands_span_and_sets_multiline_kind() {
+        let c1 = Comment::new(
+            "a".to_owned(),
+            CommentKind::SingleLine,
+            Span::new(Location::new(1, 1), Location::new(1, 6)),
+        );
+        let c2 = Comment::new(
+            "b".to_owned(),
+            CommentKind::SingleLine,
+            Span::new(Location::new(2, 1), Location::new(2, 6)),
+        );
+        let c3 = Comment::new(
+            "c".to_owned(),
+            CommentKind::MultiLine,
+            Span::new(Location::new(3, 1), Location::new(4, 3)),
+        );
+
+        let comments = Comments::new(vec![c1, c2, c3]);
+
+        let collapsed = comments.collapse_comments().unwrap_or_else(|| panic!("should collapse"));
+        assert_eq!(collapsed.text(), "a\nb\nc");
+        assert_eq!(collapsed.kind(), &CommentKind::MultiLine);
+        assert_eq!(collapsed.span(), &Span::new(Location::new(1, 1), Location::new(4, 3)));
+    }
+
+    #[test]
+    fn collapse_comments_with_leading_comments_allleading_collapses_correctly()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let src = "\
+-- c1
+-- c2
+CREATE TABLE t (id INTEGER);
+";
+        let parsed = Comments::scan_comments(src)?;
+
+        let leading = parsed.leading_comments(3, LeadingCommentCapture::AllLeading);
+        assert_eq!(texts(&leading), vec!["c1".to_owned(), "c2".to_owned()]);
+
+        let collapsed = leading.collapse_comments().unwrap_or_else(|| panic!("should collapse"));
+        assert_eq!(collapsed.text(), "c1\nc2");
+        assert_eq!(collapsed.kind(), &CommentKind::MultiLine);
+
+        // Span sanity: starts at first comment start, ends at second comment end.
+        assert_eq!(*collapsed.span().start(), Location::new(1, 1));
+        assert_eq!(collapsed.span().end().line(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn collapse_comments_with_leading_comments_single_nearest_preserves_kind()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let src = "\
+-- c1
+-- c2
+CREATE TABLE t (id INTEGER);
+";
+        let parsed = Comments::scan_comments(src)?;
+        let leading = parsed.leading_comments(3, LeadingCommentCapture::SingleNearest);
+        assert_eq!(texts(&leading), vec!["c2".to_owned()]);
+
+        let collapsed = leading.collapse_comments().unwrap_or_else(|| panic!("should collapse"));
+        assert_eq!(collapsed.text(), "c2");
+        assert_eq!(collapsed.kind(), &CommentKind::SingleLine);
 
         Ok(())
     }
