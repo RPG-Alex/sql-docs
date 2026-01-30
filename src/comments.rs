@@ -313,7 +313,7 @@ impl Comments {
                     buf.push('\n');
                 } else {
                     comments.push(Comment::new(
-                        buf.trim().to_owned(),
+                        buf.trim().replace("\n ", "\n").to_owned(),
                         Span::new(
                             Location { line: start_line, column: start_col },
                             Location::new(line_num, col),
@@ -326,7 +326,6 @@ impl Comments {
             }
             line_num += 1;
         }
-
         Ok(Self { comments })
     }
 
@@ -764,5 +763,94 @@ CREATE TABLE posts (
             assert_eq!(comment.span().start(), comment_vec[i].span().start());
             assert_eq!(comment.span().end(), comment_vec[i].span().end());
         }
+    }
+
+    #[test]
+    fn single_line_runover_comments_are_combined() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{ast::ParsedSqlFileSet, comments::Comments, files::SqlFileSet};
+        use std::{env, fs};
+
+        let base = env::temp_dir().join("single_line_runover_combined");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base)?;
+
+        let file = base.join("runover.sql");
+        fs::File::create(&file)?;
+
+        let sql = "\
+-- comment 1
+-- comment 2
+SELECT 1;
+";
+        fs::write(&file, sql)?;
+
+        let set = SqlFileSet::new(&base, &[])?;
+        let parsed_set = ParsedSqlFileSet::parse_all(set)?;
+
+        let parsed_file = parsed_set
+            .files()
+            .iter()
+            .find(|f| {
+                f.file().path().and_then(|p| p.to_str()).is_some_and(|p| p.ends_with("runover.sql"))
+            })
+            .ok_or("runover.sql should be present")?;
+
+        let comments = Comments::parse_all_comments_from_file(parsed_file)?;
+        let comments = comments.comments();
+
+        assert_eq!(comments.len(), 1, "expected a single combined comment");
+        assert_eq!(comments[0].text(), "comment 1\ncomment 2");
+
+        assert_eq!(comments[0].span().start(), &Location::new(1, 1));
+        assert_eq!(comments[0].span().end().line(), 2);
+
+        let _ = fs::remove_dir_all(&base);
+        Ok(())
+    }
+
+    #[test]
+    fn single_line_comments_with_gap_are_not_combined() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{ast::ParsedSqlFileSet, comments::Comments, files::SqlFileSet};
+        use std::{env, fs};
+
+        let base = env::temp_dir().join("single_line_runover_not_combined");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base)?;
+
+        let file = base.join("gap.sql");
+        fs::File::create(&file)?;
+
+        let sql = "\
+-- comment 1
+
+-- comment 2
+SELECT 1;
+";
+        fs::write(&file, sql)?;
+
+        let set = SqlFileSet::new(&base, &[])?;
+        let parsed_set = ParsedSqlFileSet::parse_all(set)?;
+
+        let parsed_file = parsed_set
+            .files()
+            .iter()
+            .find(|f| {
+                f.file().path().and_then(|p| p.to_str()).is_some_and(|p| p.ends_with("gap.sql"))
+            })
+            .ok_or("gap.sql should be present")?;
+
+        let comments = Comments::parse_all_comments_from_file(parsed_file)?;
+        let comments = comments.comments();
+
+        assert_eq!(comments.len(), 2, "expected two separate comments");
+        assert_eq!(comments[0].text(), "comment 1");
+        assert_eq!(comments[1].text(), "comment 2");
+
+        assert_eq!(comments[0].span().start(), &Location::new(1, 1));
+        assert_eq!(comments[0].span().end().line(), 1);
+        assert_eq!(comments[1].span().start(), &Location::new(3, 1));
+
+        let _ = fs::remove_dir_all(&base);
+        Ok(())
     }
 }
