@@ -121,11 +121,6 @@ impl Comment {
         self.text = text.into();
     }
 
-    /// Mutator method to update comment text
-    pub(crate) const fn text_mut(&mut self) -> &mut String {
-        &mut self.text
-    }
-
     /// Sets new [`Span`] locations for the comment
     pub const fn set_span_locations(&mut self, start: Location, end: Location) {
         self.span = Span::new(start, end);
@@ -236,32 +231,32 @@ impl Comments {
         let mut start_col = 1u64;
 
         let mut line_num = 1u64;
-        let mut col;
 
         let mut in_single = false;
         let mut in_multi = false;
 
+        let lines: Vec<&str> = src.lines().collect();
+
         let mut buf = String::new();
 
-        for line in src.lines() {
-            col = 1;
+        for (i, line) in lines.iter().enumerate() {
+            let mut col = 1;
             let mut chars = line.chars().peekable();
-
-            let t = line.trim_start();
-            let starts_comment = t.starts_with("--") || t.starts_with("/*");
-            if !(starts_comment) {
-                buf.clear();
-            }
-
             while let Some(c) = chars.next() {
                 match (in_single, in_multi, c) {
                     (false, false, '-') => {
                         if chars.peek().copied() == Some('-') {
                             chars.next();
                             in_single = true;
-                            start_line = line_num;
-                            start_col = col;
-                            buf.clear();
+                            let continuing = i
+                                .checked_sub(1)
+                                .and_then(|j| lines.get(j))
+                                .is_some_and(|prev| prev.trim().starts_with("--"));
+                            if !continuing {
+                                buf.clear();
+                                start_line = line_num;
+                                start_col = col;
+                            }
                             col += 1;
                         }
                     }
@@ -277,37 +272,30 @@ impl Comments {
                     }
                     (false, false, '*') => {
                         if chars.peek().copied() == Some('/') {
-                            let loc = Location::new(line_num, col);
                             return Err(CommentError::UnmatchedMultilineCommentStart {
-                                location: loc,
+                                location: Location::new(line_num, col),
                             });
                         }
                     }
                     (false, true, '*') => {
-                        if chars.peek().copied() == Some('/') {
-                            chars.next();
-                            let end_loc = Location::new(line_num, col + 1);
-                            let normalized_comment = buf
-                                .lines()
-                                .enumerate()
-                                .map(|(i, line)| match i {
-                                    0 => line.trim().to_owned(),
-                                    _ => "\n".to_owned() + line.trim(),
-                                })
-                                .collect();
-                            comments.push(Comment::new(
-                                normalized_comment,
-                                Span::new(
-                                    Location { line: start_line, column: start_col },
-                                    end_loc,
-                                ),
-                            ));
-                            in_multi = false;
-                            buf.clear();
-                            col += 1;
-                        } else {
+                        if chars.peek().copied() != Some('/') {
                             buf.push('*');
+                            continue;
                         }
+                        chars.next();
+                        let normalized_comment =
+                            buf.lines().map(str::trim).collect::<Vec<_>>().join("\n");
+
+                        comments.push(Comment::new(
+                            normalized_comment,
+                            Span::new(
+                                Location { line: start_line, column: start_col },
+                                Location::new(line_num, col + 1),
+                            ),
+                        ));
+                        in_multi = false;
+                        buf.clear();
+                        col += 1;
                     }
                     (false, true, ch) | (true, false, ch) => {
                         buf.push(ch);
@@ -321,22 +309,22 @@ impl Comments {
             }
             if in_single {
                 in_single = false;
-                let end_loc = Location::new(line_num, col);
-                comments.push(Comment::new(
-                    buf.trim().to_owned(),
-                    Span::new(Location { line: start_line, column: start_col }, end_loc),
-                ));
-                buf.clear();
+                if lines.get(i + 1).is_some_and(|line| line.trim().starts_with("--")) {
+                    buf.push('\n');
+                } else {
+                    comments.push(Comment::new(
+                        buf.trim().to_owned(),
+                        Span::new(
+                            Location { line: start_line, column: start_col },
+                            Location::new(line_num, col),
+                        ),
+                    ));
+                    buf.clear();
+                }
             } else if in_multi {
                 buf.push('\n');
             }
             line_num += 1;
-        }
-        // EOF: close any open comments
-        if in_multi {
-            return Err(CommentError::UnterminatedMultiLineComment {
-                start: Location { line: start_line, column: start_col },
-            });
         }
 
         Ok(Self { comments })
