@@ -490,7 +490,7 @@ mod tests {
 
     #[test]
     fn parse_comments() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::{ast::ParsedSqlFileSet, comments::Comments, files::SqlFileSet};
+        use crate::{ast::ParsedSqlFileSet, comments::Comments, source::SqlSource};
         let base = env::temp_dir().join("all_sql_files");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -506,7 +506,7 @@ mod tests {
         let file4 = base.join("without_comments.sql");
         fs::File::create(&file4)?;
         fs::write(&file4, no_comments_sql())?;
-        let set = SqlFileSet::new(&base, &[])?;
+        let set = SqlSource::sql_sources(&base, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
 
         for file in parsed_set.files() {
@@ -726,14 +726,14 @@ CREATE TABLE posts (
 
     #[test]
     fn single_line_comment_spans_are_correct() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::{ast::ParsedSqlFileSet, files::SqlFileSet};
+        use crate::{ast::ParsedSqlFileSet, source::SqlSource};
         let base = env::temp_dir().join("single_line_spans");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
         let file = base.join("single.sql");
         fs::File::create(&file)?;
         fs::write(&file, single_line_comments_sql())?;
-        let set = SqlFileSet::new(&base, &[])?;
+        let set = SqlSource::sql_sources(&base, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let file = parsed_set
             .files()
@@ -764,14 +764,14 @@ CREATE TABLE posts (
 
     #[test]
     fn multiline_comment_spans_are_correct() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::{ast::ParsedSqlFileSet, files::SqlFileSet};
+        use crate::{ast::ParsedSqlFileSet, source::SqlSource};
         let base = env::temp_dir().join("multi_line_spans");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
         let file = base.join("multi.sql");
         fs::File::create(&file)?;
         fs::write(&file, multiline_comments_sql())?;
-        let set = SqlFileSet::new(&base, &[])?;
+        let set = SqlSource::sql_sources(&base, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let file = parsed_set
             .files()

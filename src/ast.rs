@@ -10,35 +10,35 @@ use sqlparser::{
     parser::{Parser, ParserError},
 };
 
-use crate::files::{SqlFile, SqlFileSet};
+use crate::source::SqlSource;
 
 /// A single SQL file plus all [`Statement`].
 #[derive(Debug)]
 pub struct ParsedSqlFile {
-    file: SqlFile,
+    file: SqlSource,
     statements: Vec<Statement>,
 }
 
 impl ParsedSqlFile {
-    /// Parses a [`SqlFile`] into `sqlparser` [`Statement`] nodes.
+    /// Parses a [`SqlSource`] into `sqlparser` [`Statement`] nodes.
     ///
     /// This is the AST layer used by the `comments` module to attach leading
     /// comment spans to statements/columns.
     ///
     /// # Parameters
-    /// - `file`: the [`SqlFile`] to parse
+    /// - `file`: the [`SqlSource`] to parse
     ///
     /// # Errors
     /// - Returns [`ParserError`] if parsing fails
-    pub fn parse(file: SqlFile) -> Result<Self, ParserError> {
+    pub fn parse(file: SqlSource) -> Result<Self, ParserError> {
         let dialect = GenericDialect {};
         let statements = Parser::parse_sql(&dialect, file.content())?;
         Ok(Self { file, statements })
     }
 
-    /// Getter method for returning the [`SqlFile`]
+    /// Getter method for returning the [`SqlSource`]
     #[must_use]
-    pub const fn file(&self) -> &SqlFile {
+    pub const fn file(&self) -> &SqlSource {
         &self.file
     }
 
@@ -74,14 +74,14 @@ pub struct ParsedSqlFileSet {
 }
 
 impl ParsedSqlFileSet {
-    /// Method that parses all members in a [`SqlFileSet`]
+    /// Method that parses a set of all members in a [`SqlSource`]
     ///
     /// # Parameters
-    /// - `set` the set of [`SqlFileSet`]
+    /// - `set` the set of [`SqlSource`]
     ///
     /// # Errors
     /// - [`ParserError`] is returned for any errors parsing
-    pub fn parse_all(set: SqlFileSet) -> Result<Self, ParserError> {
+    pub fn parse_all(set: Vec<SqlSource>) -> Result<Self, ParserError> {
         let files = set.into_iter().map(ParsedSqlFile::parse).collect::<Result<Vec<_>, _>>()?;
 
         Ok(Self { files })
@@ -99,7 +99,7 @@ mod tests {
     use std::{env, fs};
 
     use super::*;
-    use crate::files::{SqlFile, SqlFileSet};
+    use crate::source::SqlSource;
 
     #[test]
     fn parsed_sql_file_parses_single_statement() -> Result<(), Box<dyn std::error::Error>> {
@@ -109,7 +109,7 @@ mod tests {
         let file_path = base.join("one.sql");
         let sql = "CREATE TABLE users (id INTEGER PRIMARY KEY);";
         fs::write(&file_path, sql)?;
-        let sql_file = SqlFile::new(&file_path)?;
+        let sql_file = SqlSource::from_path(&file_path)?;
         let parsed = ParsedSqlFile::parse(sql_file)?;
         assert_eq!(parsed.path(), Some(file_path.as_path()));
         assert_eq!(parsed.content(), sql);
@@ -131,7 +131,7 @@ mod tests {
         let sql2 = "CREATE TABLE posts (id INTEGER PRIMARY KEY);";
         fs::write(&file1, sql1)?;
         fs::write(&file2, sql2)?;
-        let set = SqlFileSet::new(&base, &[])?;
+        let set = SqlSource::sql_sources(&base, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let existing_files = parsed_set.files();
         assert_eq!(existing_files.len(), 2);

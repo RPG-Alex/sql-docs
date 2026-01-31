@@ -31,11 +31,11 @@ impl DenyList {
 
 /// A collection of discovered `.sql` files under a given directory.
 #[derive(Debug)]
-pub struct SqlFilesList {
+pub struct SqlFiles {
     sql_files: Vec<PathBuf>,
 }
 
-impl SqlFilesList {
+impl SqlFiles {
     /// Creates a list of `.sql` files under `path`, and optionally excludes files
     /// that are in the `deny_list`.
     ///
@@ -71,12 +71,6 @@ impl SqlFilesList {
     }
 }
 
-impl From<SqlFilesList> for Vec<PathBuf> {
-    fn from(value: SqlFilesList) -> Self {
-        value.sql_files
-    }
-}
-
 /// Adds `.sql` files to a Vec of [`PathBuf`] recursively.
 fn recursive_dir_scan(path: &Path) -> io::Result<Vec<PathBuf>> {
     let mut sql_files = Vec::new();
@@ -93,55 +87,47 @@ fn recursive_dir_scan(path: &Path) -> io::Result<Vec<PathBuf>> {
     Ok(sql_files)
 }
 
-/// Struct for holding the content of one `.sql`
-#[derive(Debug)]
-pub struct SqlFile {
-    path: Option<PathBuf>,
+impl From<SqlFiles> for Vec<PathBuf> {
+    fn from(value: SqlFiles) -> Self {
+        value.sql_files
+    }
+}
+
+/// Holds the path and retrieved file content
+pub struct SqlContent {
+    path: PathBuf,
     content: String,
 }
 
-impl SqlFile {
-    /// Loads a [`SqlFile`] from the given path.
+impl SqlContent {
+    /// Creates structure from a [`PathBuf`]
     ///
     /// # Errors
-    ///
-    /// Returns an [`io::Error`] if the file cannot be read.
-    pub fn new(path: &Path) -> io::Result<Self> {
+    /// - Will return [`io::Error`] if the file is not able to be parsed
+    pub fn from_path(path: &Path) -> io::Result<Self> {
         let content = fs::read_to_string(path)?;
-        Ok(Self { path: Some(path.to_owned()), content })
+        Ok(Self { path: path.to_path_buf(), content })
     }
 
-    /// Creates an [`SqlFile`] from a a [`String`] and a [`Option<PathBuf>`]
+    /// Returns the [`PathBuf`] as a reference
     #[must_use]
-    pub const fn new_from_str(content: String, path: Option<PathBuf>) -> Self {
-        Self { path, content }
+    pub const fn path(&self) -> &PathBuf {
+        &self.path
     }
 
-    /// Returns the filesystem path associated with this SQL file.
-    #[must_use]
-    pub fn path(&self) -> Option<&Path> {
-        self.path.as_deref()
-    }
-    /// Returns the [`PathBuf`] for the current path
-    #[must_use]
-    pub fn path_into_path_buf(&self) -> Option<PathBuf> {
-        self.path.clone()
-    }
-
-    /// Returns the raw SQL text contained in this file.
+    /// Returns the [`str`] as reference of file content
     #[must_use]
     pub fn content(&self) -> &str {
         &self.content
     }
 }
 
-/// A set of [`SqlFile`]
-#[derive(Debug)]
-pub struct SqlFileSet {
-    files_contents: Vec<SqlFile>,
+/// Wrapper for `Vec` of [`SqlContent`]
+pub struct SqlContentSet {
+    sql_content: Vec<SqlContent>,
 }
 
-impl SqlFileSet {
+impl SqlContentSet {
     /// Recursively discovers `.sql` files under `path`, applies the optional
     /// deny list, and loads the contents of each file.
     ///
@@ -155,29 +141,20 @@ impl SqlFileSet {
     /// Returns an [`io::Error`] if directory traversal fails or if any of the
     /// discovered SQL files cannot be read.
     pub fn new(path: &Path, deny_list: &[String]) -> io::Result<Self> {
-        let sql_files_list = SqlFilesList::new(path, deny_list)?;
+        let sql_files_list = SqlFiles::new(path, deny_list)?;
 
-        let files_contents = sql_files_list
+        let sql_content = sql_files_list
             .sql_files()
             .iter()
-            .map(|p| SqlFile::new(p))
+            .map(|p| SqlContent::from_path(p))
             .collect::<io::Result<Vec<_>>>()?;
 
-        Ok(Self { files_contents })
+        Ok(Self { sql_content })
     }
 
     /// Returns an iterator over the loaded SQL files in this set.
-    pub fn iter(&self) -> impl Iterator<Item = &SqlFile> {
-        self.files_contents.iter()
-    }
-}
-
-impl IntoIterator for SqlFileSet {
-    type IntoIter = std::vec::IntoIter<SqlFile>;
-    type Item = SqlFile;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.files_contents.into_iter()
+    pub fn iter(&self) -> impl Iterator<Item = &SqlContent> {
+        self.sql_content.iter()
     }
 }
 
@@ -251,44 +228,12 @@ mod tests {
         fs::File::create(&file2)?;
         fs::File::create(&non_sql1)?;
         fs::File::create(&non_sql2)?;
-        let sql_file_list = SqlFilesList::new(&base, &[])?;
+        let sql_file_list = SqlFiles::new(&base, &[])?;
         let mut expected = vec![file1, file2];
         expected.sort();
         assert_eq!(sql_file_list.sql_files(), expected);
         let _ = fs::remove_dir_all(&base);
 
-        Ok(())
-    }
-    #[test]
-    fn test_sql_file_read() -> Result<(), Box<dyn std::error::Error>> {
-        let base = env::temp_dir().join("recursive_scan_test3");
-        let _ = fs::remove_dir_all(&base);
-        fs::create_dir_all(&base)?;
-        let sub = base.join("subdir");
-        fs::create_dir_all(&sub)?;
-        let file1 = base.join("one.sql");
-        let file2 = sub.join("two.sql");
-        let non_sql1 = base.join("ignore.txt");
-        let non_sql2 = sub.join("README.md");
-        fs::File::create(&file1)?;
-        fs::File::create(&file2)?;
-        fs::File::create(&non_sql1)?;
-        fs::File::create(&non_sql2)?;
-        let sql_statement = "CREATE TABLE users( id INTEGER PRIMARY KEY);";
-        fs::write(&file1, sql_statement)?;
-        fs::write(&file2, sql_statement)?;
-        let mut expected = vec![&file1, &file2];
-        expected.sort();
-        let mut found: Vec<&PathBuf> = Vec::new();
-        let sql_file_set = SqlFileSet::new(&base, &[])?;
-        for file in sql_file_set.iter() {
-            assert_eq!(file.content, sql_statement);
-            if let Some(p) = &file.path {
-                found.push(p);
-            }
-        }
-        assert_eq!(found, expected);
-        let _ = fs::remove_dir_all(&base);
         Ok(())
     }
 
@@ -308,7 +253,7 @@ mod tests {
         fs::File::create(&non_sql1)?;
         fs::File::create(&non_sql2)?;
         let deny_list = &[file1.to_string_lossy().to_string()];
-        let sql_file_list = SqlFilesList::new(&base, deny_list)?;
+        let sql_file_list = SqlFiles::new(&base, deny_list)?;
         let found = sql_file_list.sql_files();
         let mut expected = vec![file2];
         expected.sort();
@@ -321,7 +266,7 @@ mod tests {
     #[test]
     fn test_file_fails() {
         let invalid_dir = "INVALID";
-        let failed_list = SqlFilesList::new(invalid_dir, &[]);
+        let failed_list = SqlFiles::new(invalid_dir, &[]);
         assert!(failed_list.is_err());
 
         let base = env::temp_dir().join("test_files_fails_dir");
@@ -329,14 +274,14 @@ mod tests {
         fs::create_dir_all(&base).unwrap_or_else(|e| panic!("panicked on {e}"));
         let bad_file = base.join("one.sql");
         fs::File::create(&bad_file).unwrap_or_else(|e| panic!("panicked on {e}"));
-        let failed_read = SqlFilesList::new(&bad_file, &[]);
+        let failed_read = SqlFiles::new(&bad_file, &[]);
         assert!(failed_read.is_err());
         let missed_file = base.join("missing.sql");
-        let missing_file = SqlFile::new(&missed_file);
+        let missing_file = SqlContent::from_path(missed_file.as_path());
         assert!(missing_file.is_err());
         let _ = fs::remove_dir_all(&base);
 
-        let bad_file_list = SqlFileSet::new(Path::new(invalid_dir), &[]);
+        let bad_file_list = SqlContentSet::new(Path::new(invalid_dir), &[]);
         assert!(bad_file_list.is_err());
     }
     #[test]
@@ -351,19 +296,11 @@ mod tests {
         fs::File::create(&file1)?;
         fs::File::create(&file2)?;
         fs::File::create(&noise)?;
-        let sql_file_list = SqlFilesList::new(&base, &[])?;
+        let sql_file_list = SqlFiles::new(&base, &[])?;
         let expected: Vec<PathBuf> = sql_file_list.sql_files();
         let got: Vec<PathBuf> = Vec::from(sql_file_list);
         assert_eq!(got, expected);
         let _ = fs::remove_dir_all(&base);
         Ok(())
-    }
-    #[test]
-    fn test_sql_file_new_from_str_has_no_path_and_preserves_content() {
-        let sql = "SELECT * FROM users;";
-        let file = SqlFile::new_from_str(sql.to_owned(), None);
-        assert!(file.path().is_none());
-        assert!(file.path_into_path_buf().is_none());
-        assert_eq!(file.content(), sql);
     }
 }

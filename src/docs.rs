@@ -472,7 +472,7 @@ CREATE TABLE posts (
 
     #[test]
     fn generate_docs_files() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::{ast::ParsedSqlFileSet, comments::Comments, files::SqlFileSet};
+        use crate::{ast::ParsedSqlFileSet, comments::Comments, source::SqlSource};
         let base = env::temp_dir().join("all_sql_files2");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -488,7 +488,7 @@ CREATE TABLE posts (
         let file4 = base.join("without_comments.sql");
         fs::File::create(&file4)?;
         fs::write(&file4, no_comments_sql())?;
-        let set = SqlFileSet::new(&base, &[])?;
+        let set = SqlSource::sql_sources(&base, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let expected_values = expect_values();
 

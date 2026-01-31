@@ -11,7 +11,8 @@ use crate::{
     comments::Comments,
     docs::{SqlFileDoc, TableDoc},
     error::DocError,
-    files::{SqlFile, SqlFilesList},
+    files::SqlFiles,
+    source::SqlSource,
 };
 
 /// Top-level documentation object containing all discovered [`TableDoc`] entries.
@@ -290,7 +291,7 @@ fn generate_docs_from_dir<P: AsRef<Path>, S: AsRef<str>>(
     deny: &[S],
 ) -> Result<Vec<SqlFileDoc>, DocError> {
     let deny_list: Vec<String> = deny.iter().map(|file| file.as_ref().to_owned()).collect();
-    let file_set = SqlFilesList::new(source, &deny_list)?;
+    let file_set = SqlFiles::new(source, &deny_list)?;
     let mut sql_docs = Vec::new();
     for file in file_set.sql_files() {
         let docs = generate_docs_from_file(file)?;
@@ -309,7 +310,7 @@ fn generate_docs_from_files(files: &[PathBuf]) -> Result<Vec<SqlFileDoc>, DocErr
 }
 
 fn generate_docs_from_file<P: AsRef<Path>>(source: P) -> Result<SqlFileDoc, DocError> {
-    let file = SqlFile::new(source.as_ref())?;
+    let file = SqlSource::from_path(source.as_ref())?;
     let parsed_file = ParsedSqlFile::parse(file)?;
     let comments = Comments::parse_all_comments_from_file(&parsed_file)?;
     let docs = SqlFileDoc::from_parsed_file(&parsed_file, &comments)?;
@@ -317,7 +318,7 @@ fn generate_docs_from_file<P: AsRef<Path>>(source: P) -> Result<SqlFileDoc, DocE
 }
 
 fn generate_docs_str(content: &str, path: Option<PathBuf>) -> Result<SqlFileDoc, DocError> {
-    let dummy_file = SqlFile::new_from_str(content.to_owned(), path);
+    let dummy_file = SqlSource::from_str(content.to_owned(), path);
     let parsed_sql = ParsedSqlFile::parse(dummy_file)?;
     let comments = Comments::parse_all_comments_from_file(&parsed_sql)?;
     let docs = SqlFileDoc::from_parsed_file(&parsed_sql, &comments)?;

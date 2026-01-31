@@ -15,5 +15,6 @@ pub mod comments;
 pub mod docs;
 pub mod error;
 pub mod files;
+pub mod source;
 pub mod sql_doc;
 pub use sql_doc::SqlDoc;
