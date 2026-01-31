@@ -5,7 +5,11 @@ use std::path::{Path, PathBuf};
 
 use sqlparser::ast::{Ident, ObjectName, ObjectNamePart, Spanned, Statement};
 
-use crate::{ast::ParsedSqlFile, comments::Comments, error::DocError};
+use crate::{
+    ast::ParsedSqlFile,
+    comments::{Comments, LeadingCommentCapture},
+    error::DocError,
+};
 
 /// Structure for containing the `name` of the `Column` and an [`Option`] for
 /// the comment as a [`String`]
@@ -214,7 +218,11 @@ impl SqlFileDoc {
     /// # Errors
     /// - Returns [`DocError::InvalidObjectName`] if the table name has no identifier components.
     /// - May also propagate other [`DocError`] variants from lower layers in the future.
-    pub fn from_parsed_file(file: &ParsedSqlFile, comments: &Comments) -> Result<Self, DocError> {
+    pub fn from_parsed_file(
+        file: &ParsedSqlFile,
+        comments: &Comments,
+        capture: LeadingCommentCapture,
+    ) -> Result<Self, DocError> {
         let mut tables = Vec::new();
         for statement in file.statements() {
             #[allow(clippy::single_match)]
@@ -224,7 +232,8 @@ impl SqlFileDoc {
                     let mut column_docs = Vec::new();
                     for column in &table.columns {
                         let column_start = column.span().start.line;
-                        let column_leading = comments.leading_comment(column_start);
+                        let column_leading =
+                            comments.leading_comments(column_start, capture).collapse_comments();
                         let column_name = column.name.value.clone();
                         let column_doc = match column_leading {
                             Some(col_comment) => {
@@ -491,10 +500,11 @@ CREATE TABLE posts (
         let set = SqlSource::sql_sources(&base, &[])?;
         let parsed_set = ParsedSqlFileSet::parse_all(set)?;
         let expected_values = expect_values();
+        let capture = crate::comments::LeadingCommentCapture::default();
 
         for file in parsed_set.files() {
             let comments = Comments::parse_all_comments_from_file(file)?;
-            let docs = SqlFileDoc::from_parsed_file(file, &comments);
+            let docs = SqlFileDoc::from_parsed_file(file, &comments, capture);
             let filename = file
                 .file()
                 .path()

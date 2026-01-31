@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     ast::ParsedSqlFile,
-    comments::Comments,
+    comments::{Comments, LeadingCommentCapture},
     docs::{SqlFileDoc, TableDoc},
     error::DocError,
     files::SqlFiles,
@@ -29,14 +29,17 @@ pub struct SqlDocBuilder<'a> {
     source: SqlFileDocSource<'a>,
     /// The list of Paths to be ignored for parsing purposes.
     deny: Vec<String>,
-    /// Struct for tracking the settings for flattening multiline comments
+    /// Tracks the chosen setting for flattening multiline comments
     multiline_flat: MultiFlatten,
+    /// Tracks the chosen setting for leading comment collection
+    leading_type: LeadingCommentCapture,
 }
 
 /// Enum for multiline comment flattening.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub enum MultiFlatten {
     /// Default option, retains multiline structure with `\n`
+    #[default]
     NoFlat,
     /// Sets multiline comments to be flattened and combined without adding formatting
     FlattenWithNone,
@@ -67,7 +70,8 @@ impl SqlDoc {
         SqlDocBuilder {
             source: SqlFileDocSource::Dir(root.as_ref().to_path_buf()),
             deny: Vec::new(),
-            multiline_flat: MultiFlatten::NoFlat,
+            multiline_flat: MultiFlatten::default(),
+            leading_type: LeadingCommentCapture::default(),
         }
     }
     /// Method for generating builder from a [`Path`] of a single file
@@ -75,7 +79,8 @@ impl SqlDoc {
         SqlDocBuilder {
             source: SqlFileDocSource::File(path.as_ref().to_path_buf()),
             deny: Vec::new(),
-            multiline_flat: MultiFlatten::NoFlat,
+            multiline_flat: MultiFlatten::default(),
+            leading_type: LeadingCommentCapture::default(),
         }
     }
 
@@ -86,29 +91,32 @@ impl SqlDoc {
                 paths.iter().map(|p| p.as_ref().to_path_buf()).collect(),
             ),
             deny: Vec::new(),
-            multiline_flat: MultiFlatten::NoFlat,
+            multiline_flat: MultiFlatten::default(),
+            leading_type: LeadingCommentCapture::default(),
         }
     }
 
     /// Creates a builder from SQL text (no filesystem path is associated) from a [`str`]
     #[must_use]
-    pub const fn builder_from_str(content: &str) -> SqlDocBuilder<'_> {
+    pub fn builder_from_str(content: &str) -> SqlDocBuilder<'_> {
         SqlDocBuilder {
             source: SqlFileDocSource::FromString(content),
             deny: Vec::new(),
-            multiline_flat: MultiFlatten::NoFlat,
+            multiline_flat: MultiFlatten::default(),
+            leading_type: LeadingCommentCapture::default(),
         }
     }
 
     /// Creates a builder from a vec of tuples containing the `sql` as [`String`] and the path as [`PathBuf`]
     #[must_use]
-    pub const fn builder_from_strs_with_paths(
+    pub fn builder_from_strs_with_paths(
         string_with_path: &[(String, PathBuf)],
     ) -> SqlDocBuilder<'_> {
         SqlDocBuilder {
             source: SqlFileDocSource::FromStringsWithPaths(string_with_path),
             deny: Vec::new(),
-            multiline_flat: MultiFlatten::NoFlat,
+            multiline_flat: MultiFlatten::default(),
+            leading_type: LeadingCommentCapture::default(),
         }
     }
 
@@ -196,25 +204,47 @@ impl SqlDocBuilder<'_> {
         self
     }
 
-    /// Method for flattening the multiline comments without additional formatting
+    /// Flattens the multiline comments without additional formatting
     #[must_use]
     pub fn flatten_multiline(mut self) -> Self {
         self.multiline_flat = MultiFlatten::FlattenWithNone;
         self
     }
 
-    /// Method for flattening the multiline comments with [`String`] containing additional leading line formatting to add, such as punctuation.
+    /// Flattens the multiline comments with [`String`] containing additional leading line formatting to add, such as punctuation.
     #[must_use]
     pub fn flatten_multiline_with(mut self, suffix: &str) -> Self {
         self.multiline_flat = MultiFlatten::Flatten(suffix.to_owned());
         self
     }
-    /// Method to set multiline comments to preserve multiple lines
+    /// Preserves multiline comments line structure
     #[must_use]
     pub fn preserve_multiline(mut self) -> Self {
         self.multiline_flat = MultiFlatten::NoFlat;
         self
     }
+
+    /// Collects only the comment on preceding lines
+    #[must_use]
+    pub const fn collect_single_nearest(mut self) -> Self {
+        self.leading_type = LeadingCommentCapture::SingleNearest;
+        self
+    }
+
+    /// Collects All valid comments on preceding lines
+    #[must_use]
+    pub const fn collect_all_leading(mut self) -> Self {
+        self.leading_type = LeadingCommentCapture::AllLeading;
+        self
+    }
+
+    /// Collects all single line comments at most one multiline comment
+    #[must_use]
+    pub const fn collect_all_single_one_multi(mut self) -> Self {
+        self.leading_type = LeadingCommentCapture::AllSingleOneMulti;
+        self
+    }
+
     /// Builds the [`SqlDoc`]
     ///
     ///
@@ -313,7 +343,8 @@ fn generate_docs_from_file<P: AsRef<Path>>(source: P) -> Result<SqlFileDoc, DocE
     let file = SqlSource::from_path(source.as_ref())?;
     let parsed_file = ParsedSqlFile::parse(file)?;
     let comments = Comments::parse_all_comments_from_file(&parsed_file)?;
-    let docs = SqlFileDoc::from_parsed_file(&parsed_file, &comments)?;
+    let docs =
+        SqlFileDoc::from_parsed_file(&parsed_file, &comments, LeadingCommentCapture::default())?;
     Ok(docs)
 }
 
@@ -321,7 +352,8 @@ fn generate_docs_str(content: &str, path: Option<PathBuf>) -> Result<SqlFileDoc,
     let dummy_file = SqlSource::from_str(content.to_owned(), path);
     let parsed_sql = ParsedSqlFile::parse(dummy_file)?;
     let comments = Comments::parse_all_comments_from_file(&parsed_sql)?;
-    let docs = SqlFileDoc::from_parsed_file(&parsed_sql, &comments)?;
+    let docs =
+        SqlFileDoc::from_parsed_file(&parsed_sql, &comments, LeadingCommentCapture::default())?;
     Ok(docs)
 }
 
@@ -346,6 +378,7 @@ mod tests {
 
     use crate::{
         SqlDoc,
+        comments::LeadingCommentCapture,
         docs::{ColumnDoc, TableDoc},
         error::DocError,
         sql_doc::{MultiFlatten, SqlDocBuilder},
@@ -568,7 +601,8 @@ mod tests {
         let expected_builder = SqlDocBuilder {
             source: crate::sql_doc::SqlFileDocSource::File(PathBuf::from("path")),
             deny: vec!["path1".to_owned(), "path2".to_owned()],
-            multiline_flat: MultiFlatten::NoFlat,
+            multiline_flat: MultiFlatten::default(),
+            leading_type: LeadingCommentCapture::default(),
         };
         assert_eq!(actual_builder, expected_builder);
     }
@@ -744,7 +778,8 @@ mod tests {
         let expected = SqlDocBuilder {
             source: crate::sql_doc::SqlFileDocSource::FromString(content),
             deny: vec![],
-            multiline_flat: MultiFlatten::NoFlat,
+            multiline_flat: MultiFlatten::default(),
+            leading_type: LeadingCommentCapture::default(),
         };
 
         assert_eq!(actual, expected);

@@ -387,7 +387,7 @@ impl Comments {
         Self::new(comments)
     }
 
-    /// Collapse this collection separate with `\n` into a single a single comment.
+    /// Collapse this collection of comments and separate each comment with `\n` as a single [`Comment`].
     #[must_use]
     pub fn collapse_comments(self) -> Option<Comment> {
         let mut iter = self.comments.into_iter();
