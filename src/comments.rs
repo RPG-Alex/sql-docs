@@ -849,10 +849,7 @@ CREATE TABLE posts (
 
     #[test]
     fn leading_comment_capture_default_is_single_nearest() {
-        match LeadingCommentCapture::default() {
-            LeadingCommentCapture::SingleNearest => {}
-            _ => panic!("Default for LeadingCommentCapture must be SingleNearest"),
-        }
+        assert_eq!(LeadingCommentCapture::default(), LeadingCommentCapture::SingleNearest);
     }
 
     #[test]
