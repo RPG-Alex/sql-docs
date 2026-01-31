@@ -22,8 +22,7 @@ default = []
 fuzzing = []
 
 [dependencies]
-sqlparser = "0.60.0"
-
+sqlparser = { version = "0.60.0", git = "https://github.com/apache/datafusion-sqlparser-rs", branch = "main" }
 
 [lints.rust]
 missing_docs = "forbid"
