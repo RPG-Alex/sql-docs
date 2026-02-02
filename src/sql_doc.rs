@@ -6,6 +6,8 @@ use std::{
     vec,
 };
 
+use sqlparser::dialect::Dialect;
+
 use crate::{
     ast::ParsedSqlFile,
     comments::{Comments, LeadingCommentCapture, MultiFlatten},
@@ -286,6 +288,8 @@ pub struct SqlDocBuilder<'a> {
     multiline_flat: MultiFlatten<'a>,
     /// Tracks the chosen setting for leading comment collection
     leading_type: LeadingCommentCapture,
+    /// The dialect specified to use
+    dialect: dyn Dialect,
 }
 
 /// Enum for specifying a file doc source as a `directory` or a specific `file`
