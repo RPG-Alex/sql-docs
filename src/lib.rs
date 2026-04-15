@@ -2,6 +2,7 @@
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(rustdoc::private_intra_doc_links)]
+#![cfg_attr(not(feature = "std"), no_std)]
 //!
 //! ## Module layout
 //!
@@ -12,11 +13,13 @@
 //! - [`sql_doc`]  — Build the top-level [`SqlDoc`] and primary entry point
 //!
 //! **Start here:** [`SqlDoc::from_dir`], [`SqlDoc::from_path`], or [`SqlDoc::builder_from_str`]
+extern crate alloc;
 
 pub mod ast;
 pub mod comments;
 pub mod docs;
 pub mod error;
+#[cfg(feature = "std")]
 pub mod files;
 pub mod source;
 pub mod sql_doc;

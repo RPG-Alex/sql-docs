@@ -1,17 +1,39 @@
 //! Module for structuring the Sql input
+#[cfg(feature = "std")]
 use crate::files::{SqlContent, SqlContentSet};
+#[cfg(feature = "std")]
 use std::{
     io,
     path::{Path, PathBuf},
 };
 
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
+
 /// Holds the optional path and content of the `sql` to be parsed
 #[derive(Debug)]
 pub struct SqlSource {
+    #[cfg(feature = "std")]
     path: Option<PathBuf>,
     content: String,
 }
 
+#[cfg(not(feature = "std"))]
+impl From<String> for SqlSource {
+    /// Creates an [`SqlSource`] from a a [`String`]
+    fn from(content: String) -> Self {
+        Self { content }
+    }
+}
+
+#[cfg(feature = "std")]
+impl From<String> for SqlSource {
+    /// Creates an [`SqlSource`] from a a [`String`]
+    fn from(content: String) -> Self {
+        Self { content, path: None }
+    }
+}
+
+#[cfg(feature = "std")]
 impl SqlSource {
     /// Loads a [`SqlSource`] from the given path.
     ///
@@ -25,7 +47,7 @@ impl SqlSource {
 
     /// Creates an [`SqlSource`] from a a [`String`] and a [`Option<PathBuf>`]
     #[must_use]
-    pub const fn from_str(content: String, path: Option<PathBuf>) -> Self {
+    pub const fn from_str_with_path(content: String, path: Option<PathBuf>) -> Self {
         Self { path, content }
     }
 
@@ -40,12 +62,6 @@ impl SqlSource {
         self.path.clone()
     }
 
-    /// Returns the raw SQL text contained in this file.
-    #[must_use]
-    pub fn content(&self) -> &str {
-        &self.content
-    }
-
     /// Recursively discovers `.sql` files under `path`, applies the optional
     /// deny list, and loads the contents of each file.
     ///
@@ -58,6 +74,7 @@ impl SqlSource {
     ///
     /// Returns an [`io::Error`] if directory traversal fails or if any of the
     /// discovered SQL files cannot be read.
+    #[cfg(feature = "std")]
     pub fn sql_sources(path: &Path, deny_list: &[String]) -> io::Result<Vec<Self>> {
         let sql_content_set = SqlContentSet::new(path, deny_list)?;
 
@@ -70,14 +87,22 @@ impl SqlSource {
     }
 }
 
+impl SqlSource {
+    /// Returns the raw SQL text contained in this file.
+    #[must_use]
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::{env, fs, path::PathBuf};
-
     use crate::source::SqlSource;
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_sql_file_read() -> Result<(), Box<dyn std::error::Error>> {
+        use std::{env, fs, path::PathBuf};
         let base = env::temp_dir().join("recursive_scan_test3");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -109,8 +134,12 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(not(feature = "std"))]
     #[test]
     fn test_sql_file_new_from_str_has_no_path_and_preserves_content() {
+        use alloc::boxed::Box;
+        use alloc::vec;
+        use alloc::vec::Vec;
         let sql = "SELECT * FROM users;";
         let file = SqlSource::from_str(sql.to_owned(), None);
         assert!(file.path().is_none());

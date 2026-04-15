@@ -1,10 +1,13 @@
 //! Public entry point for building [`SqlDoc`] from a directory, file, or string.
-
+#[cfg(feature = "std")]
 use std::{
     path::{Path, PathBuf},
     vec,
 };
 
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::vec::Vec;
 use sqlparser::dialect::Dialect;
 
 use crate::{
@@ -18,6 +21,7 @@ use crate::{
 
 /// Top-level documentation object containing all discovered [`TableDoc`] entries.
 #[derive(Clone, Debug, Eq, PartialEq)]
+
 pub struct SqlDoc {
     /// Holds the [`Vec`] of all tables found in all specified files.
     tables: Vec<TableDoc>,
@@ -285,10 +289,14 @@ pub struct SqlDocBuilder<'a> {
 /// Enum for specifying a file doc source as a `directory` or a specific `file`
 #[derive(Debug, Eq, PartialEq)]
 enum SqlFileDocSource<'a> {
+    #[cfg(feature = "std")]
     Dir(PathBuf),
+    #[cfg(feature = "std")]
     File(PathBuf),
+    #[cfg(feature = "std")]
     Files(Vec<PathBuf>),
     FromString(&'a str),
+    #[cfg(feature = "std")]
     FromStringsWithPaths(&'a [(String, PathBuf)]),
 }
 
@@ -462,6 +470,11 @@ fn generate_docs_from_strs_with_paths<D: Dialect + Default>(
 
 #[cfg(test)]
 mod tests {
+    use alloc::borrow::ToOwned;
+    use alloc::boxed::Box;
+    use alloc::format;
+    use alloc::string::String;
+    use alloc::vec::Vec;
     use std::{
         env, fs,
         path::{Path, PathBuf},
@@ -797,7 +810,6 @@ mod tests {
         let built = SqlDoc::builder_from_str(sql)
             .flatten_multiline_with(" | ")
             .build::<GenericDialect>()?;
-        dbg!(&built);
         let t = built.table("t", None)?;
         assert_eq!(t.doc(), Some("hello | world"));
         assert_eq!(t.columns()[0].doc(), Some("x | y | z"));

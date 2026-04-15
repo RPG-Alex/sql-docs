@@ -1,12 +1,13 @@
+#![cfg(feature = "std")]
 //! Discover and filter `.sql` files on disk.
 //!
 //! This module finds file paths; it does not parse SQL or extract comments.
-
 use std::{
     fs, io,
     path::{Path, PathBuf},
+    string::String,
+    vec::Vec,
 };
-
 /// A list of SQL files to exclude from processing.
 ///
 /// Entries in the deny list are treated as full [`PathBuf`] paths.
@@ -160,9 +161,15 @@ impl SqlContentSet {
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs};
-
     use super::*;
+    use std::{
+        boxed::Box,
+        env, fs,
+        path::{Path, PathBuf},
+        string::ToString,
+        vec,
+        vec::Vec,
+    };
 
     #[test]
     fn test_recursive_scan_finds_only_sql_files_recursively()

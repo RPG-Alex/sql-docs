@@ -18,7 +18,8 @@ categories = [
 ]
 
 [features]
-default = []
+default = ["std"]
+std = []
 fuzzing = []
 
 [dependencies]

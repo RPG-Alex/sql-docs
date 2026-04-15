@@ -5,6 +5,10 @@ use std::path::{Path, PathBuf};
 
 use sqlparser::ast::{Ident, ObjectName, ObjectNamePart, Spanned, Statement};
 
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use crate::{
     ast::ParsedSqlFile,
     comments::{Comments, LeadingCommentCapture, MultiFlatten},
@@ -332,14 +336,18 @@ fn schema_and_table(name: &ObjectName) -> Result<(Option<String>, String), DocEr
 
 #[cfg(test)]
 mod tests {
+    use alloc::borrow::ToOwned;
+    use alloc::boxed::Box;
+    use alloc::string::String;
+    use alloc::string::ToString;
+    use alloc::{vec, vec::Vec};
     use core::fmt;
-    use std::{env, fs, path::PathBuf};
-
     use sqlparser::{
         ast::{Ident, ObjectName, ObjectNamePart, ObjectNamePartFunction},
         dialect::GenericDialect,
         tokenizer::Span,
     };
+    use std::{env, fs, path::PathBuf};
 
     use crate::{
         docs::{ColumnDoc, SqlFileDoc, TableDoc, schema_and_table},

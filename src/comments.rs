@@ -9,6 +9,10 @@ use std::fmt;
 
 use crate::ast::ParsedSqlFile;
 
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::vec::Vec;
+
 /// Represents a line/column location within a source file.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub struct Location {
@@ -466,9 +470,13 @@ pub enum MultiFlatten<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs};
-
+    use alloc::borrow::ToOwned;
+    use alloc::boxed::Box;
+    use alloc::format;
+    use alloc::string::{String, ToString};
+    use alloc::{vec, vec::Vec};
     use sqlparser::dialect::GenericDialect;
+    use std::{env, fs};
 
     use crate::comments::{Comment, CommentError, CommentKind, Comments, Location, Span};
 

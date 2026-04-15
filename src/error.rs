@@ -4,15 +4,16 @@ use crate::{
     comments::CommentError,
     docs::{ColumnDoc, TableDoc},
 };
+use alloc::{string::String, vec::Vec};
 use core::fmt;
 use sqlparser::parser::ParserError;
-use std::{error, fmt::Debug};
 
 /// Errors that can occur while discovering, parsing, or documenting SQL files.
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum DocError {
     /// Wrapper for standard [`std::io::Error`]
+    #[cfg(feature = "std")]
     FileReadError(std::io::Error),
     /// Wrapper for [`CommentError`]
     CommentError(CommentError),
@@ -90,8 +91,9 @@ impl fmt::Display for DocError {
     }
 }
 
-impl error::Error for DocError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+#[cfg(feature = "std")]
+impl std::error::Error for DocError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::FileReadError(e) => Some(e),
             Self::CommentError(e) => Some(e),
@@ -129,7 +131,7 @@ mod tests {
     use sqlparser::parser::ParserError;
 
     use crate::{comments::CommentError, docs::TableDoc, error::DocError};
-
+    use alloc::{borrow::ToOwned, string::ToString, vec};
     #[test]
     fn test_doc_errors() {
         use std::fs;

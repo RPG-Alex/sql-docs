@@ -2,13 +2,13 @@
 //!
 //! This module does not interpret semantics; it only produces an AST + file metadata.
 
-use std::path::{Path, PathBuf};
-
 use sqlparser::{
     ast::Statement,
     dialect::Dialect,
     parser::{Parser, ParserError},
 };
+
+use alloc::vec::Vec;
 
 use crate::source::SqlSource;
 
@@ -46,13 +46,13 @@ impl ParsedSqlFile {
 
     /// Getter method for returning the current object's file's path
     #[must_use]
-    pub fn path(&self) -> Option<&Path> {
+    pub fn path(&self) -> Option<&std::path::Path> {
         self.file.path()
     }
 
-    /// Getter that returns an [`PathBuf`] for the path rather than `&Path`
+    /// Getter that returns an [`std::path::PathBuf`] for the path rather than `&Path`
     #[must_use]
-    pub fn path_into_path_buf(&self) -> Option<PathBuf> {
+    pub fn path_into_path_buf(&self) -> Option<std::path::PathBuf> {
         self.file.path_into_path_buf()
     }
 
@@ -102,9 +102,10 @@ impl ParsedSqlFileSet {
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs};
-
+    use alloc::borrow::ToOwned;
+    use alloc::boxed::Box;
     use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
+    use std::{env, fs};
 
     use super::*;
     use crate::source::SqlSource;
