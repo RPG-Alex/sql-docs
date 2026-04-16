@@ -5,13 +5,9 @@
 //! - **inline**: a comment that appears after code on the same line (ignored)
 //! - **interstitial**: a comment inside a statement (ignored)
 
-use std::fmt;
+use crate::ast::ParsedSqlSource;
 
-use crate::ast::ParsedSqlFile;
-
-use alloc::borrow::ToOwned;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
 /// Represents a line/column location within a source file.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
@@ -152,8 +148,8 @@ pub enum CommentError {
     },
 }
 
-impl fmt::Display for CommentError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for CommentError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::UnmatchedMultilineCommentStart { location } => {
                 write!(
@@ -175,7 +171,7 @@ impl fmt::Display for CommentError {
     }
 }
 
-impl std::error::Error for CommentError {}
+impl core::error::Error for CommentError {}
 
 /// Alias for comment results that may return a [`CommentError`]
 pub type CommentResult<T> = Result<T, CommentError>;
@@ -218,7 +214,7 @@ impl Comments {
     ///   comment does not have an opening `/*`
     /// - Will return [`CommentError::UnterminatedMultiLineComment`] if a
     ///   multiline comment doesn't end before `EOF`
-    pub fn parse_all_comments_from_file(file: &ParsedSqlFile) -> CommentResult<Self> {
+    pub fn parse_all_comments_from_file(file: &ParsedSqlSource) -> CommentResult<Self> {
         let src = file.content();
         let comments = Self::scan_comments(src)?;
         Ok(comments)
@@ -537,7 +533,7 @@ mod tests {
 
     #[test]
     fn parse_comments() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::{ast::ParsedSqlFileSet, comments::Comments, source::SqlSource};
+        use crate::{ast::ParsedSqlSourceSet, comments::Comments, source::SqlSource};
         let base = env::temp_dir().join("all_sql_files");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -554,12 +550,12 @@ mod tests {
         fs::File::create(&file4)?;
         fs::write(&file4, no_comments_sql())?;
         let set = SqlSource::sql_sources(&base, &[])?;
-        let parsed_set = ParsedSqlFileSet::parse_all::<GenericDialect>(set)?;
+        let parsed_set = ParsedSqlSourceSet::parse_all::<GenericDialect>(set)?;
 
-        for file in parsed_set.files() {
+        for file in parsed_set.sources() {
             let parsed_comments = Comments::parse_all_comments_from_file(file)?;
             let filename = file
-                .file()
+                .source()
                 .path()
                 .and_then(|p| p.file_name())
                 .and_then(|s| s.to_str())
@@ -773,7 +769,7 @@ CREATE TABLE posts (
 
     #[test]
     fn single_line_comment_spans_are_correct() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::{ast::ParsedSqlFileSet, source::SqlSource};
+        use crate::{ast::ParsedSqlSourceSet, source::SqlSource};
         let base = env::temp_dir().join("single_line_spans");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -781,12 +777,15 @@ CREATE TABLE posts (
         fs::File::create(&file)?;
         fs::write(&file, single_line_comments_sql())?;
         let set = SqlSource::sql_sources(&base, &[])?;
-        let parsed_set = ParsedSqlFileSet::parse_all::<GenericDialect>(set)?;
+        let parsed_set = ParsedSqlSourceSet::parse_all::<GenericDialect>(set)?;
         let file = parsed_set
-            .files()
+            .sources()
             .iter()
             .find(|f| {
-                f.file().path().and_then(|p| p.to_str()).is_some_and(|p| p.ends_with("single.sql"))
+                f.source()
+                    .path()
+                    .and_then(|p| p.to_str())
+                    .is_some_and(|p| p.ends_with("single.sql"))
             })
             .ok_or("single.sql should be present")?;
 
@@ -811,7 +810,7 @@ CREATE TABLE posts (
 
     #[test]
     fn multiline_comment_spans_are_correct() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::{ast::ParsedSqlFileSet, source::SqlSource};
+        use crate::{ast::ParsedSqlSourceSet, source::SqlSource};
         let base = env::temp_dir().join("multi_line_spans");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -819,12 +818,12 @@ CREATE TABLE posts (
         fs::File::create(&file)?;
         fs::write(&file, multiline_comments_sql())?;
         let set = SqlSource::sql_sources(&base, &[])?;
-        let parsed_set = ParsedSqlFileSet::parse_all::<GenericDialect>(set)?;
+        let parsed_set = ParsedSqlSourceSet::parse_all::<GenericDialect>(set)?;
         let file = parsed_set
-            .files()
+            .sources()
             .iter()
             .find(|f| {
-                f.file().path().and_then(|p| p.to_str()).is_some_and(|p| p.ends_with("multi.sql"))
+                f.source().path().and_then(|p| p.to_str()).is_some_and(|p| p.ends_with("multi.sql"))
             })
             .ok_or("multi.sql should be present")?;
 

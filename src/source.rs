@@ -1,19 +1,12 @@
 //! Module for structuring the Sql input
-#[cfg(feature = "std")]
-use crate::files::{SqlContent, SqlContentSet};
-#[cfg(feature = "std")]
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
 
-use alloc::{borrow::ToOwned, string::String, vec::Vec};
+use alloc::string::String;
 
 /// Holds the optional path and content of the `sql` to be parsed
 #[derive(Debug)]
 pub struct SqlSource {
     #[cfg(feature = "std")]
-    path: Option<PathBuf>,
+    path: Option<std::path::PathBuf>,
     content: String,
 }
 
@@ -39,26 +32,26 @@ impl SqlSource {
     ///
     /// # Errors
     /// - Returns an [`io::Error`] if the file cannot be read.
-    pub fn from_path(path: &Path) -> io::Result<Self> {
-        let source = SqlContent::from_path(path)?;
+    pub fn from_path(path: &std::path::Path) -> std::io::Result<Self> {
+        let source = crate::files::SqlContent::from_path(path)?;
         let content = source.content().to_owned();
         Ok(Self { path: Some(path.to_owned()), content })
     }
 
     /// Creates an [`SqlSource`] from a a [`String`] and a [`Option<PathBuf>`]
     #[must_use]
-    pub const fn from_str_with_path(content: String, path: Option<PathBuf>) -> Self {
+    pub const fn from_str_with_path(content: String, path: Option<std::path::PathBuf>) -> Self {
         Self { path, content }
     }
 
     /// Returns the filesystem path associated with this SQL file.
     #[must_use]
-    pub fn path(&self) -> Option<&Path> {
+    pub fn path(&self) -> Option<&std::path::Path> {
         self.path.as_deref()
     }
     /// Returns the [`PathBuf`] for the current path
     #[must_use]
-    pub fn path_into_path_buf(&self) -> Option<PathBuf> {
+    pub fn path_into_path_buf(&self) -> Option<std::path::PathBuf> {
         self.path.clone()
     }
 
@@ -75,13 +68,13 @@ impl SqlSource {
     /// Returns an [`io::Error`] if directory traversal fails or if any of the
     /// discovered SQL files cannot be read.
     #[cfg(feature = "std")]
-    pub fn sql_sources(path: &Path, deny_list: &[String]) -> io::Result<Vec<Self>> {
-        let sql_content_set = SqlContentSet::new(path, deny_list)?;
+    pub fn sql_sources(path: &std::path::Path, deny_list: &[String]) -> std::io::Result<Vec<Self>> {
+        let sql_content_set = crate::files::SqlContentSet::new(path, deny_list)?;
 
         let files_contents = sql_content_set
             .iter()
             .map(|p| Self::from_path(p.path()))
-            .collect::<io::Result<Vec<_>>>()?;
+            .collect::<std::io::Result<Vec<_>>>()?;
 
         Ok(files_contents)
     }

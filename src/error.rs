@@ -57,9 +57,10 @@ pub enum DocError {
     },
 }
 
-impl fmt::Display for DocError {
+impl core::fmt::Display for DocError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            #[cfg(feature = "std")]
             Self::FileReadError(error) => write!(f, "file read error: {error}"),
             Self::CommentError(comment_error) => {
                 write!(f, "comment parse error: {comment_error}")
@@ -108,6 +109,7 @@ impl std::error::Error for DocError {
     }
 }
 
+#[cfg(feature = "std")]
 impl From<std::io::Error> for DocError {
     fn from(e: std::io::Error) -> Self {
         Self::FileReadError(e)

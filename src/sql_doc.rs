@@ -1,40 +1,24 @@
 //! Public entry point for building [`SqlDoc`] from a directory, file, or string.
-#[cfg(feature = "std")]
-use std::{
-    path::{Path, PathBuf},
-    vec,
-};
-
-use alloc::borrow::ToOwned;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{borrow::ToOwned, vec, vec::Vec};
 use sqlparser::dialect::Dialect;
 
 use crate::{
-    ast::ParsedSqlFile,
+    ast::ParsedSqlSource,
     comments::{Comments, LeadingCommentCapture, MultiFlatten},
     docs::{SqlFileDoc, TableDoc},
     error::DocError,
-    files::SqlFiles,
     source::SqlSource,
 };
 
 /// Top-level documentation object containing all discovered [`TableDoc`] entries.
 #[derive(Clone, Debug, Eq, PartialEq)]
-
 pub struct SqlDoc {
     /// Holds the [`Vec`] of all tables found in all specified files.
     tables: Vec<TableDoc>,
 }
 
+#[cfg(feature = "std")]
 impl SqlDoc {
-    /// Method for creating a new [`SqlDoc`]
-    #[must_use]
-    pub fn new(mut tables: Vec<TableDoc>) -> Self {
-        tables.sort_by(|a, b| a.name().cmp(b.name()));
-        Self { tables }
-    }
-
     /// Creates an [`SqlDocBuilder`] that will scan a directory for SQL files and build an [`SqlDoc`].
     ///
     /// This is the most convenient entry point when you have a folder of `.sql` files.
@@ -57,7 +41,7 @@ impl SqlDoc {
     /// let users = doc.table("users", None).unwrap();
     /// assert_eq!(users.name(), "users");
     /// ```
-    pub fn from_dir<P: AsRef<Path> + ?Sized>(root: &P) -> SqlDocBuilder<'_> {
+    pub fn from_dir<P: AsRef<std::path::Path> + ?Sized>(root: &P) -> SqlDocBuilder<'_> {
         SqlDocBuilder {
             source: SqlFileDocSource::Dir(root.as_ref().to_path_buf()),
             deny: Vec::new(),
@@ -65,7 +49,6 @@ impl SqlDoc {
             leading_type: LeadingCommentCapture::default(),
         }
     }
-
     /// Creates an [`SqlDocBuilder`] from a single SQL file on disk.
     ///
     /// Use this when you want documentation for one specific file. The resulting tables will have their
@@ -85,7 +68,7 @@ impl SqlDoc {
     /// let t = doc.table("users", None).unwrap();
     /// assert_eq!(t.name(), "users");
     /// ```
-    pub fn from_path<P: AsRef<Path> + ?Sized>(path: &P) -> SqlDocBuilder<'_> {
+    pub fn from_path<P: AsRef<std::path::Path> + ?Sized>(path: &P) -> SqlDocBuilder<'_> {
         SqlDocBuilder {
             source: SqlFileDocSource::File(path.as_ref().to_path_buf()),
             deny: Vec::new(),
@@ -93,7 +76,6 @@ impl SqlDoc {
             leading_type: LeadingCommentCapture::default(),
         }
     }
-
     /// Creates an [`SqlDocBuilder`] from an explicit list of SQL file paths.
     ///
     /// This is useful when the files you want are scattered across directories, or when you already
@@ -115,7 +97,7 @@ impl SqlDoc {
     /// assert!(doc.table("users", None).is_ok());
     /// assert!(doc.table("posts", None).is_ok());
     /// ```
-    pub fn from_paths<P: AsRef<Path>>(paths: &[P]) -> SqlDocBuilder<'_> {
+    pub fn from_paths<P: AsRef<std::path::Path>>(paths: &[P]) -> SqlDocBuilder<'_> {
         SqlDocBuilder {
             source: SqlFileDocSource::Files(
                 paths.iter().map(|p| p.as_ref().to_path_buf()).collect(),
@@ -125,45 +107,6 @@ impl SqlDoc {
             leading_type: LeadingCommentCapture::default(),
         }
     }
-
-    /// Creates an [`SqlDocBuilder`] from raw SQL text.
-    ///
-    /// This does **not** associate any filesystem path with the input, so discovered tables will have
-    /// `path == None` (see `test_builder_from_str_no_path_has_none_path`).
-    ///
-    /// This is handy for:
-    /// - tests
-    /// - parsing SQL from a network source
-    /// - parsing SQL assembled in-memory
-    ///
-    /// # Parameters
-    /// - `content`: SQL text to parse.
-    ///
-    /// # Examples
-    /// ```
-    /// use sql_docs::{SqlDoc,GenericDialect};
-    ///
-    /// let sql = r#"
-    ///     -- Users table
-    ///     CREATE TABLE users (id INTEGER PRIMARY KEY);
-    /// "#;
-    ///
-    /// let doc = SqlDoc::builder_from_str(sql).build::<GenericDialect>().unwrap();
-    /// let users = doc.table("users", None).unwrap();
-    ///
-    /// // No backing file path when built from a string:
-    /// assert_eq!(users.path(), None);
-    /// ```
-    #[must_use]
-    pub fn builder_from_str(content: &str) -> SqlDocBuilder<'_> {
-        SqlDocBuilder {
-            source: SqlFileDocSource::FromString(content),
-            deny: Vec::new(),
-            multiline_flat: MultiFlatten::default(),
-            leading_type: LeadingCommentCapture::default(),
-        }
-    }
-
     /// Creates an [`SqlDocBuilder`] from from raw SQL text while preserving an associated path.
     ///
     /// Each tuple is interpreted as:
@@ -198,10 +141,58 @@ impl SqlDoc {
     /// ```
     #[must_use]
     pub fn builder_from_strs_with_paths(
-        string_with_path: &[(String, PathBuf)],
+        string_with_path: &[(String, std::path::PathBuf)],
     ) -> SqlDocBuilder<'_> {
         SqlDocBuilder {
             source: SqlFileDocSource::FromStringsWithPaths(string_with_path),
+            deny: Vec::new(),
+            multiline_flat: MultiFlatten::default(),
+            leading_type: LeadingCommentCapture::default(),
+        }
+    }
+}
+
+impl SqlDoc {
+    /// Method for creating a new [`SqlDoc`]
+    #[must_use]
+    pub fn new(mut tables: Vec<TableDoc>) -> Self {
+        tables.sort_by(|a, b| a.name().cmp(b.name()));
+        Self { tables }
+    }
+
+    /// Creates an [`SqlDocBuilder`] from raw SQL text.
+    ///
+    /// This does **not** associate any filesystem path with the input, so discovered tables will have
+    /// `path == None` (see `test_builder_from_str_no_path_has_none_path`).
+    ///
+    /// This is handy for:
+    /// - tests
+    /// - parsing SQL from a network source
+    /// - parsing SQL assembled in-memory
+    ///
+    /// # Parameters
+    /// - `content`: SQL text to parse.
+    ///
+    /// # Examples
+    /// ```
+    /// use sql_docs::{SqlDoc,GenericDialect};
+    ///
+    /// let sql = r#"
+    ///     -- Users table
+    ///     CREATE TABLE users (id INTEGER PRIMARY KEY);
+    /// "#;
+    ///
+    /// let doc = SqlDoc::builder_from_str(sql).build::<GenericDialect>().unwrap();
+    /// let users = doc.table("users", None).unwrap();
+    ///
+    /// // No backing file path when built from a string:
+    /// assert_eq!(users.path(), None);
+    /// ```
+    #[must_use]
+    pub fn builder_from_str(content: &str) -> SqlDocBuilder<'_> {
+        SqlDocBuilder {
+            source: SqlFileDocSource::FromString(content),
+            #[cfg(feature = "std")]
             deny: Vec::new(),
             multiline_flat: MultiFlatten::default(),
             leading_type: LeadingCommentCapture::default(),
@@ -231,17 +222,15 @@ impl SqlDoc {
                 let mut schemas = multiple.iter().filter(|v| v.schema() == schema);
                 let first = schemas.next().ok_or_else(|| DocError::TableWithSchemaNotFound {
                     name: name.to_owned(),
-                    schema: schema.map_or_else(
-                        || "No schema provided".to_owned(),
-                        std::borrow::ToOwned::to_owned,
-                    ),
+                    schema: schema
+                        .map_or_else(|| "No schema provided".to_owned(), ToOwned::to_owned),
                 })?;
                 if schemas.next().is_some() {
                     return Err(DocError::DuplicateTablesFound {
                         tables: multiple
                             .iter()
                             .filter(|v| v.schema() == schema)
-                            .map(std::borrow::ToOwned::to_owned)
+                            .map(ToOwned::to_owned)
                             .collect(),
                     });
                 }
@@ -279,6 +268,7 @@ pub struct SqlDocBuilder<'a> {
     /// The source for implementing the [`SqlDoc`] to be built
     source: SqlFileDocSource<'a>,
     /// The list of Paths to be ignored for parsing purposes.
+    #[cfg(feature = "std")]
     deny: Vec<String>,
     /// Tracks the chosen setting for flattening multiline comments
     multiline_flat: MultiFlatten<'a>,
@@ -290,16 +280,17 @@ pub struct SqlDocBuilder<'a> {
 #[derive(Debug, Eq, PartialEq)]
 enum SqlFileDocSource<'a> {
     #[cfg(feature = "std")]
-    Dir(PathBuf),
+    Dir(std::path::PathBuf),
     #[cfg(feature = "std")]
-    File(PathBuf),
+    File(std::path::PathBuf),
     #[cfg(feature = "std")]
-    Files(Vec<PathBuf>),
+    Files(Vec<std::path::PathBuf>),
     FromString(&'a str),
     #[cfg(feature = "std")]
-    FromStringsWithPaths(&'a [(String, PathBuf)]),
+    FromStringsWithPaths(&'a [(String, std::path::PathBuf)]),
 }
 
+#[cfg(feature = "std")]
 impl<'a> SqlDocBuilder<'a> {
     /// Method for adding an item to the deny list
     ///
@@ -310,7 +301,90 @@ impl<'a> SqlDocBuilder<'a> {
         self.deny.push(deny_path.into());
         self
     }
+    /// Builds the [`SqlDoc`]
+    ///
+    ///
+    /// Comment flattening (if enabled) is applied as a post-processing step after docs are generated.
+    ///
+    /// # Errors
+    /// - Will return `DocError` bubbled up
+    pub fn build<D>(self) -> Result<SqlDoc, DocError>
+    where
+        D: Dialect + Default,
+    {
+        let docs: Vec<SqlFileDoc> = match &self.source {
+            SqlFileDocSource::Dir(path) => generate_docs_from_dir::<_, _, D>(
+                path,
+                &self.deny,
+                self.leading_type,
+                self.multiline_flat,
+            )?,
+            SqlFileDocSource::File(file) => {
+                let sql_doc =
+                    generate_docs_from_file::<_, D>(file, self.leading_type, self.multiline_flat)?;
+                vec![sql_doc]
+            }
+            SqlFileDocSource::FromString(content) => {
+                let sql_docs = generate_docs_str_with_path::<D>(
+                    content,
+                    None,
+                    self.leading_type,
+                    self.multiline_flat,
+                )?;
+                vec![sql_docs]
+            }
+            SqlFileDocSource::FromStringsWithPaths(strings_paths) => {
+                generate_docs_from_strs_with_paths::<D>(
+                    strings_paths,
+                    self.leading_type,
+                    self.multiline_flat,
+                )?
+            }
+            SqlFileDocSource::Files(files) => {
+                generate_docs_from_files::<D>(files, self.leading_type, self.multiline_flat)?
+            }
+        };
+        let num_of_tables = docs.iter().map(super::docs::SqlFileDoc::number_of_tables).sum();
+        let mut tables = Vec::with_capacity(num_of_tables);
+        for sql_doc in docs {
+            tables.extend(sql_doc);
+        }
+        let sql_doc = SqlDoc::new(tables);
+        Ok(sql_doc)
+    }
+}
 
+#[cfg(not(feature = "std"))]
+impl<'a> SqlDocBuilder<'a> {
+    /// Builds the [`SqlDoc`]
+    ///
+    ///
+    /// Comment flattening (if enabled) is applied as a post-processing step after docs are generated.
+    ///
+    /// # Errors
+    /// - Will return `DocError` bubbled up
+    pub fn build<D>(self) -> Result<SqlDoc, DocError>
+    where
+        D: Dialect + Default,
+    {
+        let docs: Vec<SqlFileDoc> = match &self.source {
+            SqlFileDocSource::FromString(content) => {
+                let sql_docs =
+                    generate_docs_str::<D>(content, self.leading_type, self.multiline_flat)?;
+                vec![sql_docs]
+            }
+        };
+        let num_of_tables = docs.iter().map(super::docs::SqlFileDoc::number_of_tables).sum();
+        let mut tables = Vec::with_capacity(num_of_tables);
+        for sql_doc in docs {
+            tables.extend(sql_doc);
+        }
+        let sql_doc = SqlDoc::new(tables);
+        Ok(sql_doc)
+    }
+}
+
+impl<'a> SqlDocBuilder<'a> {
     /// Flattens the multiline comments without additional formatting
     #[must_use]
     pub const fn flatten_multiline(mut self) -> Self {
@@ -351,64 +425,17 @@ impl<'a> SqlDocBuilder<'a> {
         self.leading_type = LeadingCommentCapture::AllSingleOneMulti;
         self
     }
-
-    /// Builds the [`SqlDoc`]
-    ///
-    ///
-    /// Comment flattening (if enabled) is applied as a post-processing step after docs are generated.
-    ///
-    /// # Errors
-    /// - Will return `DocError` bubbled up
-    pub fn build<D>(self) -> Result<SqlDoc, DocError>
-    where
-        D: Dialect + Default,
-    {
-        let docs: Vec<SqlFileDoc> = match &self.source {
-            SqlFileDocSource::Dir(path) => generate_docs_from_dir::<_, _, D>(
-                path,
-                &self.deny,
-                self.leading_type,
-                self.multiline_flat,
-            )?,
-            SqlFileDocSource::File(file) => {
-                let sql_doc =
-                    generate_docs_from_file::<_, D>(file, self.leading_type, self.multiline_flat)?;
-                vec![sql_doc]
-            }
-            SqlFileDocSource::FromString(content) => {
-                let sql_docs =
-                    generate_docs_str::<D>(content, None, self.leading_type, self.multiline_flat)?;
-                vec![sql_docs]
-            }
-            SqlFileDocSource::FromStringsWithPaths(strings_paths) => {
-                generate_docs_from_strs_with_paths::<D>(
-                    strings_paths,
-                    self.leading_type,
-                    self.multiline_flat,
-                )?
-            }
-            SqlFileDocSource::Files(files) => {
-                generate_docs_from_files::<D>(files, self.leading_type, self.multiline_flat)?
-            }
-        };
-        let num_of_tables = docs.iter().map(super::docs::SqlFileDoc::number_of_tables).sum();
-        let mut tables = Vec::with_capacity(num_of_tables);
-        for sql_doc in docs {
-            tables.extend(sql_doc);
-        }
-        let sql_doc = SqlDoc::new(tables);
-        Ok(sql_doc)
-    }
 }
 
-fn generate_docs_from_dir<P: AsRef<Path>, S: AsRef<str>, D: Dialect + Default>(
+#[cfg(feature = "std")]
+fn generate_docs_from_dir<P: AsRef<std::path::Path>, S: AsRef<str>, D: Dialect + Default>(
     source: P,
     deny: &[S],
     capture: LeadingCommentCapture,
     flatten: MultiFlatten,
 ) -> Result<Vec<SqlFileDoc>, DocError> {
     let deny_list: Vec<String> = deny.iter().map(|file| file.as_ref().to_owned()).collect();
-    let file_set = SqlFiles::new(source, &deny_list)?;
+    let file_set = crate::files::SqlFiles::new(source, &deny_list)?;
     let mut sql_docs = Vec::new();
     for file in file_set.sql_files() {
         let docs = generate_docs_from_file::<_, D>(file, capture, flatten)?;
@@ -417,8 +444,9 @@ fn generate_docs_from_dir<P: AsRef<Path>, S: AsRef<str>, D: Dialect + Default>(
     Ok(sql_docs)
 }
 
+#[cfg(feature = "std")]
 fn generate_docs_from_files<D: Dialect + Default>(
-    files: &[PathBuf],
+    files: &[std::path::PathBuf],
     capture: LeadingCommentCapture,
     flatten: MultiFlatten,
 ) -> Result<Vec<SqlFileDoc>, DocError> {
@@ -430,39 +458,60 @@ fn generate_docs_from_files<D: Dialect + Default>(
     Ok(sql_docs)
 }
 
-fn generate_docs_from_file<P: AsRef<Path>, D: Dialect + Default>(
+#[cfg(feature = "std")]
+fn generate_docs_from_file<P: AsRef<std::path::Path>, D: Dialect + Default>(
     source: P,
     capture: LeadingCommentCapture,
     flatten: MultiFlatten,
 ) -> Result<SqlFileDoc, DocError> {
     let file = SqlSource::from_path(source.as_ref())?;
-    let parsed_file = ParsedSqlFile::parse::<D>(file)?;
+    let parsed_file = ParsedSqlSource::parse::<D>(file)?;
     let comments = Comments::parse_all_comments_from_file(&parsed_file)?;
-    let docs = SqlFileDoc::from_parsed_file(&parsed_file, &comments, capture, flatten)?;
+    let docs = SqlFileDoc::from_parsed_source(&parsed_file, &comments, capture, flatten)?;
     Ok(docs)
 }
 
-fn generate_docs_str<D: Dialect + Default>(
+#[cfg(feature = "std")]
+fn generate_docs_str_with_path<D: Dialect + Default>(
     content: &str,
-    path: Option<PathBuf>,
+    path: Option<std::path::PathBuf>,
     capture: LeadingCommentCapture,
     flatten: MultiFlatten,
 ) -> Result<SqlFileDoc, DocError> {
-    let dummy_file = SqlSource::from_str(content.to_owned(), path);
-    let parsed_sql = ParsedSqlFile::parse::<D>(dummy_file)?;
+    let dummy_file = SqlSource::from_str_with_path(content.to_owned(), path);
+    let parsed_sql = ParsedSqlSource::parse::<D>(dummy_file)?;
     let comments = Comments::parse_all_comments_from_file(&parsed_sql)?;
-    let docs = SqlFileDoc::from_parsed_file(&parsed_sql, &comments, capture, flatten)?;
+    let docs = SqlFileDoc::from_parsed_source(&parsed_sql, &comments, capture, flatten)?;
     Ok(docs)
 }
 
+#[cfg(not(feature = "std"))]
+fn generate_docs_str<D: Dialect + Default>(
+    content: &str,
+    capture: LeadingCommentCapture,
+    flatten: MultiFlatten,
+) -> Result<SqlFileDoc, DocError> {
+    let source = SqlSource::from(content.to_owned());
+    let parsed_sql = ParsedSqlSource::parse::<D>(source)?;
+    let comments = Comments::parse_all_comments_from_file(&parsed_sql)?;
+    let docs = SqlFileDoc::from_parsed_source(&parsed_sql, &comments, capture, flatten)?;
+    Ok(docs)
+}
+
+#[cfg(feature = "std")]
 fn generate_docs_from_strs_with_paths<D: Dialect + Default>(
-    strings_with_paths: &[(String, PathBuf)],
+    strings_with_paths: &[(String, std::path::PathBuf)],
     capture: LeadingCommentCapture,
     flatten: MultiFlatten,
 ) -> Result<Vec<SqlFileDoc>, DocError> {
     let mut docs = Vec::new();
     for (content, path) in strings_with_paths {
-        docs.push(generate_docs_str::<D>(content, Some(path.to_owned()), capture, flatten)?);
+        docs.push(generate_docs_str_with_path::<D>(
+            content,
+            Some(path.to_owned()),
+            capture,
+            flatten,
+        )?);
     }
 
     Ok(docs)

@@ -1,16 +1,13 @@
 //! Convert parsed SQL + extracted comments into structured documentation types.
 
 use core::fmt;
-use std::path::{Path, PathBuf};
 
 use sqlparser::ast::{Ident, ObjectName, ObjectNamePart, Spanned, Statement};
 
-use alloc::borrow::ToOwned;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
 use crate::{
-    ast::ParsedSqlFile,
+    ast::ParsedSqlSource,
     comments::{Comments, LeadingCommentCapture, MultiFlatten},
     error::DocError,
 };
@@ -72,29 +69,11 @@ pub struct TableDoc {
     name: String,
     doc: Option<String>,
     columns: Vec<ColumnDoc>,
-    path: Option<PathBuf>,
+    #[cfg(feature = "std")]
+    path: Option<std::path::PathBuf>,
 }
 
 impl TableDoc {
-    /// Creates a new [`TableDoc`] after sorting [`ColumnDoc`] by `name`
-    ///
-    /// # Parameters
-    /// - name: `String` - the name of the table
-    /// - doc: `Option<String>` of the comment for table
-    /// - columns: the `Vec<ColumnDoc>` of all [`ColumnDoc`] for this table
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn new(
-        schema: Option<String>,
-        name: String,
-        doc: Option<String>,
-        mut columns: Vec<ColumnDoc>,
-        path: Option<PathBuf>,
-    ) -> Self {
-        columns.sort_by(|a, b| a.name().cmp(b.name()));
-        Self { schema, name, doc, columns, path }
-    }
-
     /// Getter for the `Schema` of the table (if there is one)
     #[must_use]
     pub fn schema(&self) -> Option<&str> {
@@ -116,11 +95,6 @@ impl TableDoc {
     /// Setter to update the table doc
     pub fn set_doc(&mut self, doc: impl Into<String>) {
         self.doc = Some(doc.into());
-    }
-
-    /// Setter for updating the table [`PathBuf`] source
-    pub fn set_path(&mut self, path: Option<impl Into<PathBuf>>) {
-        self.path = path.map(Into::into);
     }
 
     /// Getter for the `columns` field
@@ -154,17 +128,62 @@ impl TableDoc {
             multiple => Err(DocError::DuplicateColumnsFound { columns: multiple.to_vec() }),
         }
     }
-
-    /// Getter method for retrieving the table's [`Path`]
-    #[must_use]
-    pub fn path(&self) -> Option<&Path> {
-        self.path.as_deref()
-    }
-
     /// Returns the number of [`ColumnDoc`]
     #[must_use]
     pub fn number_of_columns(&self) -> usize {
         self.columns().len()
+    }
+}
+
+#[cfg(not(feature = "std"))]
+impl TableDoc {
+    /// Creates a new [`TableDoc`] after sorting [`ColumnDoc`] by `name`
+    ///
+    /// # Parameters
+    /// - name: `String` - the name of the table
+    /// - doc: `Option<String>` of the comment for table
+    /// - columns: the `Vec<ColumnDoc>` of all [`ColumnDoc`] for this table
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn new(
+        schema: Option<String>,
+        name: String,
+        doc: Option<String>,
+        mut columns: Vec<ColumnDoc>,
+    ) -> Self {
+        columns.sort_by(|a, b| a.name().cmp(b.name()));
+        Self { schema, name, doc, columns }
+    }
+}
+
+#[cfg(feature = "std")]
+impl TableDoc {
+    /// Creates a new [`TableDoc`] after sorting [`ColumnDoc`] by `name`
+    ///
+    /// # Parameters
+    /// - name: `String` - the name of the table
+    /// - doc: `Option<String>` of the comment for table
+    /// - columns: the `Vec<ColumnDoc>` of all [`ColumnDoc`] for this table
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn new(
+        schema: Option<String>,
+        name: String,
+        doc: Option<String>,
+        mut columns: Vec<ColumnDoc>,
+        path: Option<std::path::PathBuf>,
+    ) -> Self {
+        columns.sort_by(|a, b| a.name().cmp(b.name()));
+        Self { schema, name, doc, columns, path }
+    }
+    /// Getter method for retrieving the table's [`Path`]
+    #[must_use]
+    pub fn path(&self) -> Option<&std::path::Path> {
+        self.path.as_deref()
+    }
+    /// Setter for updating the table [`PathBuf`] source
+    pub fn set_path(&mut self, path: Option<impl Into<std::path::PathBuf>>) {
+        self.path = path.map(Into::into);
     }
 }
 
@@ -209,27 +228,27 @@ impl SqlFileDoc {
         Self { tables }
     }
 
-    /// Final structured documentation extracted from one SQL file.
+    /// Final structured documentation extracted from one SQL source.
     ///
     /// This merges:
     /// - Parsed SQL AST (`CREATE TABLE` statements for example)
     /// - Comment spans into a format suitable for documentation generation.
     ///
     /// # Parameters
-    /// - `file`: the [`ParsedSqlFile`]
+    /// - `source`: the [`ParsedSqlFile`]
     /// - `comments`: the parsed [`Comments`]
     ///
     /// # Errors
     /// - Returns [`DocError::InvalidObjectName`] if the table name has no identifier components.
     /// - May also propagate other [`DocError`] variants from lower layers in the future.
-    pub fn from_parsed_file(
-        file: &ParsedSqlFile,
+    pub fn from_parsed_source(
+        source: &ParsedSqlSource,
         comments: &Comments,
         capture: LeadingCommentCapture,
         flatten: MultiFlatten,
     ) -> Result<Self, DocError> {
         let mut tables = Vec::new();
-        for statement in file.statements() {
+        for statement in source.statements() {
             #[allow(clippy::single_match)]
             match statement {
                 Statement::CreateTable(table) => {
@@ -257,7 +276,8 @@ impl SqlFileDoc {
                         name,
                         table_leading.as_ref().map(|c| c.text().to_owned()),
                         column_docs,
-                        file.path_into_path_buf(),
+                        #[cfg(feature = "std")]
+                        source.path_into_path_buf(),
                     );
                     tables.push(table_doc);
                 }
@@ -493,7 +513,7 @@ CREATE TABLE posts (
 
     #[test]
     fn generate_docs_files() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::{ast::ParsedSqlFileSet, comments::Comments, source::SqlSource};
+        use crate::{ast::ParsedSqlSourceSet, comments::Comments, source::SqlSource};
         let base = env::temp_dir().join("all_sql_files2");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -510,27 +530,27 @@ CREATE TABLE posts (
         fs::File::create(&file4)?;
         fs::write(&file4, no_comments_sql())?;
         let set = SqlSource::sql_sources(&base, &[])?;
-        let parsed_set = ParsedSqlFileSet::parse_all::<GenericDialect>(set)?;
+        let parsed_set = ParsedSqlSourceSet::parse_all::<GenericDialect>(set)?;
         let expected_values = expect_values();
         let capture = crate::comments::LeadingCommentCapture::default();
 
-        for file in parsed_set.files() {
+        for file in parsed_set.sources() {
             let comments = Comments::parse_all_comments_from_file(file)?;
-            let docs = SqlFileDoc::from_parsed_file(
+            let docs = SqlFileDoc::from_parsed_source(
                 file,
                 &comments,
                 capture,
                 crate::comments::MultiFlatten::NoFlat,
             );
             let filename = file
-                .file()
+                .source()
                 .path()
                 .and_then(|p| p.file_name())
                 .and_then(|s| s.to_str())
                 .ok_or("unable to parse file")?;
 
             let got = docs?;
-            let file_path = file.file().path().ok_or("missing path")?;
+            let file_path = file.source().path().ok_or("missing path")?;
 
             match filename {
                 "with_single_line_comments.sql" | "with_mixed_comments.sql" => {

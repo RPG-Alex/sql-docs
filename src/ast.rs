@@ -12,56 +12,60 @@ use alloc::vec::Vec;
 
 use crate::source::SqlSource;
 
-/// A single SQL file plus all [`Statement`].
+/// A single SQL Source (such as a file) plus all [`Statement`].
 #[derive(Debug)]
-pub struct ParsedSqlFile {
-    file: SqlSource,
+pub struct ParsedSqlSource {
+    source: SqlSource,
     statements: Vec<Statement>,
 }
 
-impl ParsedSqlFile {
+#[cfg(feature = "std")]
+impl ParsedSqlSource {
+    /// Getter method for returning the current object' source's path
+    #[must_use]
+    pub fn path(&self) -> Option<&std::path::Path> {
+        self.source.path()
+    }
+
+    /// Getter that returns an [`std::path::PathBuf`] for the path rather than `&Path`
+    #[must_use]
+    pub fn path_into_path_buf(&self) -> Option<std::path::PathBuf> {
+        self.source.path_into_path_buf()
+    }
+}
+
+impl ParsedSqlSource {
     /// Parses a [`SqlSource`] into `sqlparser` [`Statement`] nodes.
     ///
     /// This is the AST layer used by the `comments` module to attach leading
     /// comment spans to statements/columns.
     ///
     /// # Parameters
-    /// - `file`: the [`SqlSource`] to parse
+    /// - `source`: the [`SqlSource`] to parse
     ///
     /// # Errors
     /// - Returns [`ParserError`] if parsing fails
-    pub fn parse<D>(file: SqlSource) -> Result<Self, ParserError>
+    pub fn parse<D>(source: SqlSource) -> Result<Self, ParserError>
     where
         D: Dialect + Default,
     {
-        let statements = Parser::parse_sql(&D::default(), file.content())?;
-        Ok(Self { file, statements })
+        let statements = Parser::parse_sql(&D::default(), source.content())?;
+        Ok(Self { source, statements })
     }
 
     /// Getter method for returning the [`SqlSource`]
     #[must_use]
-    pub const fn file(&self) -> &SqlSource {
-        &self.file
+    pub const fn source(&self) -> &SqlSource {
+        &self.source
     }
-
-    /// Getter method for returning the current object's file's path
-    #[must_use]
-    pub fn path(&self) -> Option<&std::path::Path> {
-        self.file.path()
-    }
-
-    /// Getter that returns an [`std::path::PathBuf`] for the path rather than `&Path`
-    #[must_use]
-    pub fn path_into_path_buf(&self) -> Option<std::path::PathBuf> {
-        self.file.path_into_path_buf()
-    }
-
-    /// Getter for the file's content
+    /// Getter for the source's content
     #[must_use]
     pub fn content(&self) -> &str {
-        self.file.content()
+        self.source.content()
     }
+}
 
+impl ParsedSqlSource {
     /// Getter method for returning the vector of all statements [`Statement`]
     #[must_use]
     pub fn statements(&self) -> &[Statement] {
@@ -69,13 +73,13 @@ impl ParsedSqlFile {
     }
 }
 
-/// Struct to contain the vector of parsed SQL files
+/// Struct to contain the vector of parsed SQL sources
 #[derive(Debug)]
-pub struct ParsedSqlFileSet {
-    files: Vec<ParsedSqlFile>,
+pub struct ParsedSqlSourceSet {
+    sources: Vec<ParsedSqlSource>,
 }
 
-impl ParsedSqlFileSet {
+impl ParsedSqlSourceSet {
     /// Method that parses a set of all members in a [`SqlSource`]
     ///
     /// # Parameters
@@ -87,16 +91,16 @@ impl ParsedSqlFileSet {
     where
         D: Dialect + Default,
     {
-        let files =
-            set.into_iter().map(ParsedSqlFile::parse::<D>).collect::<Result<Vec<_>, _>>()?;
+        let sources =
+            set.into_iter().map(ParsedSqlSource::parse::<D>).collect::<Result<Vec<_>, _>>()?;
 
-        Ok(Self { files })
+        Ok(Self { sources })
     }
 
-    /// Getter method for returning the vector of all [`ParsedSqlFile`]
+    /// Getter method for returning the vector of all [`ParsedSqlSource`]
     #[must_use]
-    pub fn files(&self) -> &[ParsedSqlFile] {
-        &self.files
+    pub fn sources(&self) -> &[ParsedSqlSource] {
+        &self.sources
     }
 }
 
@@ -119,7 +123,7 @@ mod tests {
         let sql = "CREATE TABLE users (id INTEGER PRIMARY KEY);";
         fs::write(&file_path, sql)?;
         let sql_file = SqlSource::from_path(&file_path)?;
-        let parsed = ParsedSqlFile::parse::<GenericDialect>(sql_file)?;
+        let parsed = ParsedSqlSource::parse::<GenericDialect>(sql_file)?;
         assert_eq!(parsed.path(), Some(file_path.as_path()));
         assert_eq!(parsed.content(), sql);
         assert_eq!(parsed.statements().len(), 1);
@@ -141,8 +145,8 @@ mod tests {
         fs::write(&file1, sql1)?;
         fs::write(&file2, sql2)?;
         let set = SqlSource::sql_sources(&base, &[])?;
-        let parsed_set = ParsedSqlFileSet::parse_all::<GenericDialect>(set)?;
-        let existing_files = parsed_set.files();
+        let parsed_set = ParsedSqlSourceSet::parse_all::<GenericDialect>(set)?;
+        let existing_files = parsed_set.sources();
         assert_eq!(existing_files.len(), 2);
         for parsed in existing_files {
             assert_eq!(parsed.statements().len(), 1);
@@ -166,7 +170,7 @@ mod tests {
         let sql = "CREATE TABLE t (id INTEGER PRIMARY KEY);";
         fs::write(&file_path, sql)?;
         let sql_file = SqlSource::from_path(&file_path)?;
-        let parsed = ParsedSqlFile::parse::<GenericDialect>(sql_file)?;
+        let parsed = ParsedSqlSource::parse::<GenericDialect>(sql_file)?;
         assert_eq!(parsed.path_into_path_buf(), Some(file_path));
         let _ = fs::remove_dir_all(&base);
         Ok(())
@@ -190,8 +194,8 @@ mod tests {
             CREATE TABLE t (id INTEGER PRIMARY KEY);
         ";
 
-        let src = SqlSource::from_str(sql.to_owned(), None);
-        let parsed = ParsedSqlFile::parse::<PostgreSqlDialect>(src)?;
+        let src = SqlSource::from(sql.to_owned());
+        let parsed = ParsedSqlSource::parse::<PostgreSqlDialect>(src)?;
         assert!(
             parsed.statements().len() >= 2,
             "expected at least 2 statements (function + table)"
@@ -232,11 +236,11 @@ mod tests {
         fs::write(&file2, pg_sql)?;
 
         let set = SqlSource::sql_sources(&base, &[])?;
-        let parsed_set = ParsedSqlFileSet::parse_all::<GenericDialect>(set)?;
+        let parsed_set = ParsedSqlSourceSet::parse_all::<GenericDialect>(set)?;
 
-        assert_eq!(parsed_set.files().len(), 2);
+        assert_eq!(parsed_set.sources().len(), 2);
 
-        for parsed in parsed_set.files() {
+        for parsed in parsed_set.sources() {
             assert!(
                 parsed.statements().iter().any(|s| matches!(s, Statement::CreateTable { .. })),
                 "expected CreateTable in parsed file; got statements: {:?}",
@@ -251,8 +255,8 @@ mod tests {
     #[test]
     fn parsed_sql_file_parse_invalid_sql_returns_error() {
         let sql = "CREATE TABLE";
-        let src = SqlSource::from_str(sql.to_owned(), None);
-        let res = ParsedSqlFile::parse::<GenericDialect>(src);
+        let src = SqlSource::from(sql.to_owned());
+        let res = ParsedSqlSource::parse::<GenericDialect>(src);
         assert!(res.is_err(), "expected parse to fail for invalid SQL");
     }
 }
