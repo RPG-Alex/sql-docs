@@ -34,60 +34,7 @@ CREATE TABLE users (
 ```
 A rudimentary implementation can be generated with:
 ```rust
-#![cfg(feature = "std")]
-use sql_docs::{GenericDialect,SqlDoc,error::DocError};
-use std::{env, fs};
-
-fn main() -> Result<(), DocError> {
-    // Temporary directory and file created for demonstration purposes
-    let base = env::temp_dir().join("tmp_dir");
-    let _ = fs::remove_dir_all(&base);
-    fs::create_dir_all(&base)?;
-    let example = base.join("example.sql");
-
-    fs::write(
-        &example,
-        r#"-- Table storing user accounts
--- Contains all user values
-/* Rows generated at registration */
-CREATE TABLE users (
-    /* Primary key for each user */
-    id INTEGER PRIMARY KEY,
-    -- The user's login name
-    username VARCHAR(255) NOT NULL,
-    /* User's email address */
-    email VARCHAR(255) UNIQUE NOT NULL
-);"#,
-    )?;
-
-    // Extract documentation from a single file
-    let docs = SqlDoc::from_path(&example)
-        // Capture all valid comment lines preceding the statements directly
-        .collect_all_leading()
-        // Replace `\n` with a `str`
-        .flatten_multiline_with(". ")
-        // Finally build the `SqlDoc`
-        .build::<GenericDialect>()?;
-    // Or extract recursively from a directory
-    // let docs = SqlDoc::from_dir(&base).build()?;
-
-    // Retrieve a specific table
-    let users = docs.table("users", None)?;
-
-    // Table name
-    assert_eq!(users.name(), "users");
-    // Optional table-level documentation
-    assert_eq!(users.doc(), Some("Table storing user accounts. Contains all user values. Rows generated at registration"));
-    // Path to the source file
-    assert_eq!(users.path(), Some(example.as_ref()));
-
-    let _ = fs::remove_dir_all(&base);
-    Ok(())
-}
-```
-
-Or with no `std` and from a `String`:
-```rust
+#![cfg(not(feature = "std"))]
 use sql_docs::{GenericDialect,SqlDoc,error::DocError};
 
 fn main() -> Result<(), DocError> {
@@ -106,7 +53,7 @@ CREATE TABLE users (
 );"#;
 
     // Extract documentation from a single file
-    let docs = SqlDoc::from(&example)
+    let docs = SqlDoc::builder_from_str(&example)
         // Capture all valid comment lines preceding the statements directly
         .collect_all_leading()
         // Replace `\n` with a `str`
@@ -124,7 +71,7 @@ CREATE TABLE users (
     // Optional table-level documentation
     assert_eq!(users.doc(), Some("Table storing user accounts. Contains all user values. Rows generated at registration"));
     Ok(())
-}
+ }
 ```
 ## Primary Interface (Main API)
 
