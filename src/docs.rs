@@ -1,10 +1,9 @@
 //! Convert parsed SQL + extracted comments into structured documentation types.
 
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use core::fmt;
 
 use sqlparser::ast::{Ident, ObjectName, ObjectNamePart, Spanned, Statement};
-
-use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
 use crate::{
     ast::ParsedSqlSource,
@@ -356,35 +355,32 @@ fn schema_and_table(name: &ObjectName) -> Result<(Option<String>, String), DocEr
 
 #[cfg(test)]
 mod tests {
-    use alloc::borrow::ToOwned;
-    use alloc::boxed::Box;
-    use alloc::string::String;
-    use alloc::string::ToString;
-    use alloc::{vec, vec::Vec};
+    use alloc::{
+        borrow::ToOwned,
+        boxed::Box,
+        string::{String, ToString},
+        vec,
+        vec::Vec,
+    };
     use core::fmt;
+
     use sqlparser::{
         ast::{Ident, ObjectName, ObjectNamePart, ObjectNamePartFunction},
-        dialect::GenericDialect,
         tokenizer::Span,
     };
-    use std::{env, fs, path::PathBuf};
 
     use crate::{
         docs::{ColumnDoc, SqlFileDoc, TableDoc, schema_and_table},
         error::DocError,
     };
 
+    #[cfg(not(feature = "std"))]
     #[test]
     fn test_sql_docs_struct() {
         let column_doc = ColumnDoc::new("id".to_owned(), Some("The ID for the table".to_owned()));
         let columns = vec![column_doc];
-        let table_doc = TableDoc::new(
-            None,
-            "user".to_owned(),
-            Some("The table for users".to_owned()),
-            columns,
-            None,
-        );
+        let table_doc =
+            TableDoc::new(None, "user".to_owned(), Some("The table for users".to_owned()), columns);
         let tables = vec![table_doc];
         let sql_doc = SqlFileDoc::new(tables);
         let sql_doc_val =
@@ -511,8 +507,13 @@ CREATE TABLE posts (
 "
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn generate_docs_files() -> Result<(), Box<dyn std::error::Error>> {
+        use std::{env, fs};
+
+        use sqlparser::dialect::GenericDialect;
+
         use crate::{ast::ParsedSqlSourceSet, comments::Comments, source::SqlSource};
         let base = env::temp_dir().join("all_sql_files2");
         let _ = fs::remove_dir_all(&base);
@@ -572,6 +573,7 @@ CREATE TABLE posts (
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     fn with_path(mut doc: SqlFileDoc, path: &std::path::Path) -> SqlFileDoc {
         let pb = path.to_path_buf();
 
@@ -582,6 +584,7 @@ CREATE TABLE posts (
         doc
     }
 
+    #[cfg(feature = "std")]
     fn expected_without_comments_docs() -> SqlFileDoc {
         SqlFileDoc::new(vec![
             TableDoc::new(
@@ -612,6 +615,7 @@ CREATE TABLE posts (
         ])
     }
 
+    #[cfg(feature = "std")]
     fn expect_values() -> Vec<SqlFileDoc> {
         let mut docs = Vec::new();
 
@@ -697,6 +701,7 @@ CREATE TABLE posts (
         docs
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_doc() {
         let col_doc = ColumnDoc::new("test".to_owned(), Some("comment".to_owned()));
@@ -781,7 +786,7 @@ CREATE TABLE posts (
 
     #[test]
     fn schema_and_table_schema_and_table_with_function_ignored()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let name = ObjectName(vec![
             ObjectNamePart::Identifier(ident("catalog")),
             ObjectNamePart::Identifier(ident("public")),
@@ -829,6 +834,7 @@ CREATE TABLE posts (
         w.writes
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_display_propagates_every_question_mark_path_for_column_and_table() {
         let col_with_doc = ColumnDoc::new("col_a".into(), Some("doc".into()));
@@ -872,6 +878,7 @@ CREATE TABLE posts (
         assert_eq!(col.doc(), Some("primary key for users table"));
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn table_doc_set_doc_updates_doc() {
         let mut table = TableDoc::new(None, "users".to_owned(), None, Vec::new(), None);
@@ -884,6 +891,7 @@ CREATE TABLE posts (
         assert_eq!(table.doc(), Some("updated users table docs"));
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn columns_mut_allows_mutating_column_docs() {
         let mut table = TableDoc::new(
@@ -910,6 +918,8 @@ CREATE TABLE posts (
         assert_eq!(cols[1].name(), "username");
         assert_eq!(cols[1].doc(), Some("login name"));
     }
+
+    #[cfg(feature = "std")]
     #[test]
     fn test_from_sql_file_doc_into_vec_table_doc_preserves_contents_and_order() {
         let t1 = TableDoc::new(
@@ -933,8 +943,11 @@ CREATE TABLE posts (
         let expected = vec![t1, t2];
         assert_eq!(got, expected);
     }
+
+    #[cfg(feature = "std")]
     #[test]
     fn test_table_doc_path_getter_returns_expected_value() {
+        use std::path::PathBuf;
         let mut table = TableDoc::new(None, "users".to_owned(), None, Vec::new(), None);
         assert_eq!(table.path(), None);
         let pb = PathBuf::from("some/dir/file.sql");
@@ -945,6 +958,7 @@ CREATE TABLE posts (
         assert_eq!(table.path(), None);
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_table_doc_column() {
         let table = TableDoc::new(

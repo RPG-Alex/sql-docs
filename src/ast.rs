@@ -2,13 +2,13 @@
 //!
 //! This module does not interpret semantics; it only produces an AST + file metadata.
 
+use alloc::vec::Vec;
+
 use sqlparser::{
     ast::Statement,
     dialect::Dialect,
     parser::{Parser, ParserError},
 };
-
-use alloc::vec::Vec;
 
 use crate::source::SqlSource;
 
@@ -106,44 +106,45 @@ impl ParsedSqlSourceSet {
 
 #[cfg(test)]
 mod tests {
-    use alloc::borrow::ToOwned;
-    use alloc::boxed::Box;
+    use alloc::{borrow::ToOwned, boxed::Box};
+
     use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
-    use std::{env, fs};
 
     use super::*;
     use crate::source::SqlSource;
 
+    #[cfg(feature = "std")]
     #[test]
     fn parsed_sql_file_parses_single_statement() -> Result<(), Box<dyn std::error::Error>> {
-        let base = env::temp_dir().join("parsed_sql_file_single_stmt_test");
-        let _ = fs::remove_dir_all(&base);
-        fs::create_dir_all(&base)?;
+        let base = std::env::temp_dir().join("parsed_sql_file_single_stmt_test");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base)?;
         let file_path = base.join("one.sql");
         let sql = "CREATE TABLE users (id INTEGER PRIMARY KEY);";
-        fs::write(&file_path, sql)?;
+        std::fs::write(&file_path, sql)?;
         let sql_file = SqlSource::from_path(&file_path)?;
         let parsed = ParsedSqlSource::parse::<GenericDialect>(sql_file)?;
         assert_eq!(parsed.path(), Some(file_path.as_path()));
         assert_eq!(parsed.content(), sql);
         assert_eq!(parsed.statements().len(), 1);
-        let _ = fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&base);
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn parsed_sql_file_set_parses_multiple_files() -> Result<(), Box<dyn std::error::Error>> {
-        let base = env::temp_dir().join("parsed_sql_file_set_multi_test");
-        let _ = fs::remove_dir_all(&base);
-        fs::create_dir_all(&base)?;
+        let base = std::env::temp_dir().join("parsed_sql_file_set_multi_test");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base)?;
         let sub = base.join("subdir");
-        fs::create_dir_all(&sub)?;
+        std::fs::create_dir_all(&sub)?;
         let file1 = base.join("one.sql");
         let file2 = sub.join("two.sql");
         let sql1 = "CREATE TABLE users (id INTEGER PRIMARY KEY);";
         let sql2 = "CREATE TABLE posts (id INTEGER PRIMARY KEY);";
-        fs::write(&file1, sql1)?;
-        fs::write(&file2, sql2)?;
+        std::fs::write(&file1, sql1)?;
+        std::fs::write(&file2, sql2)?;
         let set = SqlSource::sql_sources(&base, &[])?;
         let parsed_set = ParsedSqlSourceSet::parse_all::<GenericDialect>(set)?;
         let existing_files = parsed_set.sources();
@@ -157,28 +158,29 @@ mod tests {
             }
         }
 
-        let _ = fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&base);
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn parsed_sql_file_path_into_path_buf_round_trips() -> Result<(), Box<dyn std::error::Error>> {
-        let base = env::temp_dir().join("parsed_sql_file_path_into_path_buf_round_trips");
-        let _ = fs::remove_dir_all(&base);
-        fs::create_dir_all(&base)?;
+        let base = std::env::temp_dir().join("parsed_sql_file_path_into_path_buf_round_trips");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base)?;
         let file_path = base.join("one.sql");
         let sql = "CREATE TABLE t (id INTEGER PRIMARY KEY);";
-        fs::write(&file_path, sql)?;
+        std::fs::write(&file_path, sql)?;
         let sql_file = SqlSource::from_path(&file_path)?;
         let parsed = ParsedSqlSource::parse::<GenericDialect>(sql_file)?;
         assert_eq!(parsed.path_into_path_buf(), Some(file_path));
-        let _ = fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&base);
         Ok(())
     }
 
     #[test]
     fn parsed_sql_file_parse_postgres_handles_pg_function_syntax()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
             CREATE OR REPLACE FUNCTION f()
             RETURNS SMALLINT
@@ -207,17 +209,18 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn parsed_sql_file_set_parse_all_uses_default_dialect() -> Result<(), Box<dyn std::error::Error>>
     {
-        let base = env::temp_dir().join("parsed_sql_file_set_parse_all_default_dialect");
-        let _ = fs::remove_dir_all(&base);
-        fs::create_dir_all(&base)?;
+        let base = std::env::temp_dir().join("parsed_sql_file_set_parse_all_default_dialect");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base)?;
 
         let file1 = base.join("one.sql");
         let file2 = base.join("two.sql");
 
-        fs::write(&file1, "CREATE TABLE t1 (id INTEGER PRIMARY KEY);")?;
+        std::fs::write(&file1, "CREATE TABLE t1 (id INTEGER PRIMARY KEY);")?;
 
         let pg_sql = r"
             CREATE OR REPLACE FUNCTION f()
@@ -233,7 +236,7 @@ mod tests {
 
             CREATE TABLE t2 (id INTEGER PRIMARY KEY);
         ";
-        fs::write(&file2, pg_sql)?;
+        std::fs::write(&file2, pg_sql)?;
 
         let set = SqlSource::sql_sources(&base, &[])?;
         let parsed_set = ParsedSqlSourceSet::parse_all::<GenericDialect>(set)?;
@@ -248,7 +251,7 @@ mod tests {
             );
         }
 
-        let _ = fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&base);
         Ok(())
     }
 

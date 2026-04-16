@@ -1,5 +1,6 @@
 //! Public entry point for building [`SqlDoc`] from a directory, file, or string.
 use alloc::{borrow::ToOwned, vec, vec::Vec};
+
 use sqlparser::dialect::Dialect;
 
 use crate::{
@@ -186,6 +187,7 @@ impl SqlDoc {
     /// let users = doc.table("users", None).unwrap();
     ///
     /// // No backing file path when built from a string:
+    /// #[cfg(feature = "std")]
     /// assert_eq!(users.path(), None);
     /// ```
     #[must_use]
@@ -519,16 +521,7 @@ fn generate_docs_from_strs_with_paths<D: Dialect + Default>(
 
 #[cfg(test)]
 mod tests {
-    use alloc::borrow::ToOwned;
-    use alloc::boxed::Box;
-    use alloc::format;
-    use alloc::string::String;
-    use alloc::vec::Vec;
-    use std::{
-        env, fs,
-        path::{Path, PathBuf},
-        vec,
-    };
+    use alloc::{borrow::ToOwned, boxed::Box, vec, vec::Vec};
 
     use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 
@@ -540,8 +533,10 @@ mod tests {
         sql_doc::{MultiFlatten, SqlDocBuilder},
     };
 
+    #[cfg(feature = "std")]
     #[test]
     fn build_sql_doc_from_file() -> Result<(), Box<dyn std::error::Error>> {
+        use std::{env, fs};
         let base = env::temp_dir().join("build_sql_doc_from_file");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -563,8 +558,11 @@ mod tests {
         let _ = fs::remove_dir_all(&base);
         Ok(())
     }
+
+    #[cfg(feature = "std")]
     #[test]
     fn build_sql_doc_from_dir() -> Result<(), Box<dyn std::error::Error>> {
+        use std::{env, fs};
         let base = env::temp_dir().join("build_sql_doc_from_dir");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -586,8 +584,10 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_retrieve_table_and_schema() -> Result<(), Box<dyn std::error::Error>> {
+        use std::{env, fs};
         let base = env::temp_dir().join("build_sql_doc_with_schema");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -624,6 +624,7 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_schema_err() {
         let empty_set = SqlDoc::new(vec![]);
@@ -649,13 +650,15 @@ mod tests {
         });
     }
 
-    fn stamp_table_paths(tables: &mut [TableDoc], path: &Path) {
+    #[cfg(feature = "std")]
+    fn stamp_table_paths(tables: &mut [TableDoc], path: &std::path::Path) {
         let pb = path.to_path_buf();
         for t in tables {
             t.set_path(Some(pb.clone()));
         }
     }
 
+    #[cfg(feature = "std")]
     fn sample_sql() -> Vec<(&'static str, SqlDoc)> {
         vec![
             (
@@ -743,6 +746,7 @@ mod tests {
         ]
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_sql_doc_getters() {
         let tables = vec![TableDoc::new(None, "name".to_owned(), None, vec![], None)];
@@ -751,8 +755,10 @@ mod tests {
         assert_eq!(sql_doc.tables(), tables);
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_sql_builder_deny_from_path() {
+        use std::{path::PathBuf, vec};
         let actual_builder = SqlDoc::from_path("path").deny("path1").deny("path2");
         let expected_builder = SqlDocBuilder {
             source: crate::sql_doc::SqlFileDocSource::File(PathBuf::from("path")),
@@ -763,8 +769,10 @@ mod tests {
         assert_eq!(actual_builder, expected_builder);
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_sql_builder_to_sql_doc() -> Result<(), Box<dyn std::error::Error>> {
+        use std::{env, fs, vec};
         let base = env::temp_dir().join("sql_builder_to_sql_doc");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -786,6 +794,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_builder_multiflatten_variants() {
         let b1 = SqlDoc::from_path("dummy.sql");
@@ -801,7 +810,7 @@ mod tests {
     }
 
     #[test]
-    fn test_preserve_multiline_keeps_newlines_in_docs() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_preserve_multiline_keeps_newlines_in_docs() -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
         /* Table Doc line1
            line2 */
@@ -822,7 +831,7 @@ mod tests {
 
     #[test]
     fn test_flatten_multiline_no_separator_removes_newlines()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
         /* A
            B
@@ -844,7 +853,7 @@ mod tests {
 
     #[test]
     fn test_flatten_multiline_with_separator_inserts_separator()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
         /* hello
            world */
@@ -865,6 +874,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_tables_mut_allows_modification() {
         let mut sql_doc =
@@ -876,7 +886,7 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_build_with_flattening() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_builder_build_with_flattening() -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
         /* Table Doc line1
            line2 */
@@ -904,6 +914,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_sql_doc_from_str_builds_expected_builder() {
         let content = "CREATE TABLE t(id INTEGER);";
@@ -920,8 +931,10 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_build_sql_doc_from_paths() -> Result<(), Box<dyn std::error::Error>> {
+        use std::{env, fs, vec};
         let base = env::temp_dir().join("build_sql_doc_from_paths");
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base)?;
@@ -959,6 +972,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_tables_binary_searchable_by_name() {
         let sample = sample_sql();
@@ -972,6 +986,7 @@ mod tests {
         assert_eq!(sql_doc.tables()[id].name(), "users");
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_table_with_schema_not_found_when_name_exists() {
         let sql_doc = SqlDoc::new(vec![
@@ -987,6 +1002,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_table_duplicate_tables_found_for_same_name_and_schema() {
         let sql_doc = SqlDoc::new(vec![
@@ -1001,9 +1017,10 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_table_selects_correct_schema_when_multiple_exist()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let sql_doc = SqlDoc::new(vec![
             TableDoc::new(Some("analytics".to_owned()), "events".to_owned(), None, vec![], None),
             TableDoc::new(Some("public".to_owned()), "events".to_owned(), None, vec![], None),
@@ -1013,9 +1030,12 @@ mod tests {
         assert_eq!(t.schema(), Some("public"));
         Ok(())
     }
+
+    #[cfg(feature = "std")]
     #[test]
     fn test_generate_docs_from_strs_with_paths_builds_tables_and_stamps_paths()
     -> Result<(), Box<dyn std::error::Error>> {
+        use std::{path::PathBuf, vec};
         // Two simple SQL strings with distinct paths
         let sql1 = "
             -- Users table
@@ -1057,9 +1077,11 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_builder_from_strs_with_paths_is_used_in_build_match_arm()
     -> Result<(), Box<dyn std::error::Error>> {
+        use std::path::PathBuf;
         let sql_a = "CREATE TABLE alpha (id INTEGER);";
         let sql_b = "CREATE TABLE beta (id INTEGER);";
         let path_a = PathBuf::from("alpha.sql");
@@ -1079,8 +1101,9 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     #[test]
-    fn test_builder_from_str_no_path_has_none_path() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_builder_from_str_no_path_has_none_path() -> Result<(), Box<dyn core::error::Error>> {
         let sql = "CREATE TABLE t (id INTEGER);";
         let built = SqlDoc::builder_from_str(sql).build::<GenericDialect>()?;
 
@@ -1089,6 +1112,8 @@ mod tests {
 
         Ok(())
     }
+
+    #[cfg(feature = "std")]
     #[test]
     fn test_table_with_schema_not_found_uses_no_schema_provided_message() {
         use crate::{SqlDoc, docs::TableDoc, error::DocError};
@@ -1112,7 +1137,7 @@ mod tests {
 
     #[test]
     fn test_postgres_dialect_parses_postgres_only_function_syntax()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
             CREATE OR REPLACE FUNCTION get_owner_role(user_uuid UUID, target_owner_id UUID)
             RETURNS SMALLINT
@@ -1135,7 +1160,7 @@ mod tests {
 
     #[test]
     fn test_generic_dialect_ignores_non_table_pg_statements_and_still_builds()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
         CREATE OR REPLACE FUNCTION get_owner_role(user_uuid UUID, target_owner_id UUID)
         RETURNS SMALLINT

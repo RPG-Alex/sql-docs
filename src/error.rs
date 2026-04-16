@@ -1,12 +1,14 @@
 //! Error types returned by this crate’s public APIs.
 
+use alloc::{string::String, vec::Vec};
+use core::fmt;
+
+use sqlparser::parser::ParserError;
+
 use crate::{
     comments::CommentError,
     docs::{ColumnDoc, TableDoc},
 };
-use alloc::{string::String, vec::Vec};
-use core::fmt;
-use sqlparser::parser::ParserError;
 
 /// Errors that can occur while discovering, parsing, or documenting SQL files.
 #[non_exhaustive]
@@ -92,10 +94,10 @@ impl core::fmt::Display for DocError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for DocError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl core::error::Error for DocError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
+            #[cfg(feature = "std")]
             Self::FileReadError(e) => Some(e),
             Self::CommentError(e) => Some(e),
             Self::SqlParserError(e) => Some(e),
@@ -130,15 +132,20 @@ impl From<ParserError> for DocError {
 
 #[cfg(test)]
 mod tests {
-    use sqlparser::parser::ParserError;
 
-    use crate::{comments::CommentError, docs::TableDoc, error::DocError};
-    use alloc::{borrow::ToOwned, string::ToString, vec};
+    #[cfg(not(feature = "std"))]
+    use alloc::{string::ToString, vec};
+
+    use crate::{docs::TableDoc, error::DocError};
+
+    #[cfg(feature = "std")]
     #[test]
     fn test_doc_errors() {
         use std::fs;
 
-        use crate::comments::Location;
+        use sqlparser::parser::ParserError;
+
+        use crate::comments::{CommentError, Location};
         let Err(io_error) = fs::read_dir("INVALID") else {
             panic!("there should not be a directory called INVALID")
         };
@@ -159,10 +166,14 @@ mod tests {
         assert_eq!(sql_error.to_string(), expected_sql_error);
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_doc_errors_from() {
-        use crate::comments::Location;
         use std::fs;
+
+        use sqlparser::parser::ParserError;
+
+        use crate::comments::{CommentError, Location};
 
         let Err(io_error) = fs::read_dir("INVALID") else {
             panic!("there should not be a directory called INVALID")
@@ -192,11 +203,14 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_doc_error_source() {
         use std::{error::Error, fs};
 
-        use crate::comments::Location;
+        use sqlparser::parser::ParserError;
+
+        use crate::comments::{CommentError, Location};
 
         let Err(io_err) = fs::read_dir("INVALID") else {
             panic!("there should not be a directory called INVALID")
@@ -225,6 +239,7 @@ mod tests {
         assert_eq!(src.to_string(), parser_str);
     }
 
+    #[cfg(feature = "std")]
     fn table_doc_for_test(name: &str) -> TableDoc {
         TableDoc::new(None, name.to_string(), None, vec![], None)
     }
@@ -241,6 +256,7 @@ mod tests {
         assert_eq!(e.to_string(), "Table not found in SqlDoc: users");
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_doc_error_display_duplicate_tables_found() {
         let t1 = table_doc_for_test("dup_table");
@@ -253,7 +269,7 @@ mod tests {
 
     #[test]
     fn test_doc_error_source_none_for_non_wrapped_variants() {
-        use std::error::Error as _;
+        use core::error::Error as _;
         let invalid = DocError::InvalidObjectName { message: "x".to_string(), line: 1, column: 1 };
         assert!(invalid.source().is_none());
         let not_found = DocError::TableNotFound { name: "x".to_string() };
@@ -283,7 +299,7 @@ mod tests {
 
     #[test]
     fn test_doc_error_source_none_for_column_variants() {
-        use std::error::Error as _;
+        use core::error::Error as _;
 
         let not_found = DocError::ColumnNotFound { name: "x".to_string() };
         assert!(not_found.source().is_none());
@@ -303,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_doc_error_source_none_for_table_with_schema_not_found() {
-        use std::error::Error as _;
+        use core::error::Error as _;
         let e = DocError::TableWithSchemaNotFound {
             name: "events".to_string(),
             schema: "analytics".to_string(),

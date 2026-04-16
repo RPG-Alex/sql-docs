@@ -130,13 +130,9 @@ mod tests {
     #[cfg(not(feature = "std"))]
     #[test]
     fn test_sql_file_new_from_str_has_no_path_and_preserves_content() {
-        use alloc::boxed::Box;
-        use alloc::vec;
-        use alloc::vec::Vec;
+        use crate::alloc::borrow::ToOwned;
         let sql = "SELECT * FROM users;";
-        let file = SqlSource::from_str(sql.to_owned(), None);
-        assert!(file.path().is_none());
-        assert!(file.path_into_path_buf().is_none());
+        let file = SqlSource::from(sql.to_owned());
         assert_eq!(file.content(), sql);
     }
 }

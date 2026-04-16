@@ -161,7 +161,6 @@ impl SqlContentSet {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::{
         boxed::Box,
         env, fs,
@@ -170,6 +169,8 @@ mod tests {
         vec,
         vec::Vec,
     };
+
+    use super::*;
 
     #[test]
     fn test_recursive_scan_finds_only_sql_files_recursively()

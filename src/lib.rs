@@ -23,20 +23,20 @@ pub mod error;
 pub mod files;
 pub mod source;
 pub mod sql_doc;
-pub use crate::comments::{LeadingCommentCapture, MultiFlatten};
-pub use crate::docs::{ColumnDoc, TableDoc};
-pub use crate::error::DocError;
-pub use crate::sql_doc::{SqlDoc, SqlDocBuilder};
+pub use crate::{
+    comments::{LeadingCommentCapture, MultiFlatten},
+    docs::{ColumnDoc, TableDoc},
+    error::DocError,
+    sql_doc::{SqlDoc, SqlDocBuilder},
+};
 
 /// Common imports for typical usage of this crate.
 pub mod prelude {
     pub use crate::{
-        AnsiDialect, BigQueryDialect, ClickHouseDialect, DatabricksDialect, Dialect, DuckDbDialect,
-        GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, OracleDialect, PostgreSqlDialect,
-        RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
-    };
-    pub use crate::{
-        ColumnDoc, DocError, LeadingCommentCapture, MultiFlatten, SqlDoc, SqlDocBuilder, TableDoc,
+        AnsiDialect, BigQueryDialect, ClickHouseDialect, ColumnDoc, DatabricksDialect, Dialect,
+        DocError, DuckDbDialect, GenericDialect, HiveDialect, LeadingCommentCapture, MsSqlDialect,
+        MultiFlatten, MySqlDialect, OracleDialect, PostgreSqlDialect, RedshiftSqlDialect,
+        SQLiteDialect, SnowflakeDialect, SqlDoc, SqlDocBuilder, TableDoc,
     };
 }
 

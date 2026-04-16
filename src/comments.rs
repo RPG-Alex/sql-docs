@@ -5,9 +5,9 @@
 //! - **inline**: a comment that appears after code on the same line (ignored)
 //! - **interstitial**: a comment inside a statement (ignored)
 
-use crate::ast::ParsedSqlSource;
-
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
+
+use crate::ast::ParsedSqlSource;
 
 /// Represents a line/column location within a source file.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
@@ -466,13 +466,14 @@ pub enum MultiFlatten<'a> {
 
 #[cfg(test)]
 mod tests {
-    use alloc::borrow::ToOwned;
-    use alloc::boxed::Box;
-    use alloc::format;
-    use alloc::string::{String, ToString};
-    use alloc::{vec, vec::Vec};
-    use sqlparser::dialect::GenericDialect;
-    use std::{env, fs};
+    use alloc::{
+        borrow::ToOwned,
+        boxed::Box,
+        format,
+        string::{String, ToString},
+        vec,
+        vec::Vec,
+    };
 
     use crate::comments::{Comment, CommentError, CommentKind, Comments, Location, Span};
 
@@ -531,24 +532,27 @@ mod tests {
         assert_eq!(comment.span.end.line, 2);
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn parse_comments() -> Result<(), Box<dyn std::error::Error>> {
+        use sqlparser::dialect::GenericDialect;
+
         use crate::{ast::ParsedSqlSourceSet, comments::Comments, source::SqlSource};
-        let base = env::temp_dir().join("all_sql_files");
-        let _ = fs::remove_dir_all(&base);
-        fs::create_dir_all(&base)?;
+        let base = std::env::temp_dir().join("all_sql_files");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base)?;
         let file1 = base.join("with_single_line_comments.sql");
-        fs::File::create(&file1)?;
-        fs::write(&file1, single_line_comments_sql())?;
+        std::fs::File::create(&file1)?;
+        std::fs::write(&file1, single_line_comments_sql())?;
         let file2 = base.join("with_multiline_comments.sql");
-        fs::File::create(&file2)?;
-        fs::write(&file2, multiline_comments_sql())?;
+        std::fs::File::create(&file2)?;
+        std::fs::write(&file2, multiline_comments_sql())?;
         let file3 = base.join("with_mixed_comments.sql");
-        fs::File::create(&file3)?;
-        fs::write(&file3, mixed_comments_sql())?;
+        std::fs::File::create(&file3)?;
+        std::fs::write(&file3, mixed_comments_sql())?;
         let file4 = base.join("without_comments.sql");
-        fs::File::create(&file4)?;
-        fs::write(&file4, no_comments_sql())?;
+        std::fs::File::create(&file4)?;
+        std::fs::write(&file4, no_comments_sql())?;
         let set = SqlSource::sql_sources(&base, &[])?;
         let parsed_set = ParsedSqlSourceSet::parse_all::<GenericDialect>(set)?;
 
@@ -581,7 +585,7 @@ mod tests {
                 }
             }
         }
-        let _ = fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&base);
         Ok(())
     }
 
@@ -767,15 +771,18 @@ CREATE TABLE posts (
         ]
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn single_line_comment_spans_are_correct() -> Result<(), Box<dyn std::error::Error>> {
+        use sqlparser::dialect::GenericDialect;
+
         use crate::{ast::ParsedSqlSourceSet, source::SqlSource};
-        let base = env::temp_dir().join("single_line_spans");
-        let _ = fs::remove_dir_all(&base);
-        fs::create_dir_all(&base)?;
+        let base = std::env::temp_dir().join("single_line_spans");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base)?;
         let file = base.join("single.sql");
-        fs::File::create(&file)?;
-        fs::write(&file, single_line_comments_sql())?;
+        std::fs::File::create(&file)?;
+        std::fs::write(&file, single_line_comments_sql())?;
         let set = SqlSource::sql_sources(&base, &[])?;
         let parsed_set = ParsedSqlSourceSet::parse_all::<GenericDialect>(set)?;
         let file = parsed_set
@@ -804,19 +811,22 @@ CREATE TABLE posts (
             primary_key.span().end().column() > primary_key.span().start().column(),
             "end column should be after start column",
         );
-        let _ = fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&base);
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn multiline_comment_spans_are_correct() -> Result<(), Box<dyn std::error::Error>> {
+        use sqlparser::dialect::GenericDialect;
+
         use crate::{ast::ParsedSqlSourceSet, source::SqlSource};
-        let base = env::temp_dir().join("multi_line_spans");
-        let _ = fs::remove_dir_all(&base);
-        fs::create_dir_all(&base)?;
+        let base = std::env::temp_dir().join("multi_line_spans");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base)?;
         let file = base.join("multi.sql");
-        fs::File::create(&file)?;
-        fs::write(&file, multiline_comments_sql())?;
+        std::fs::File::create(&file)?;
+        std::fs::write(&file, multiline_comments_sql())?;
         let set = SqlSource::sql_sources(&base, &[])?;
         let parsed_set = ParsedSqlSourceSet::parse_all::<GenericDialect>(set)?;
         let file = parsed_set
@@ -846,7 +856,7 @@ CREATE TABLE posts (
             primary_key.span().end().column() > primary_key.span().start().column(),
             "end column should be after start column for primary key multiline comment",
         );
-        let _ = fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&base);
         Ok(())
     }
 
@@ -900,7 +910,7 @@ CREATE TABLE posts (
 
     #[test]
     fn leading_comments_single_nearest_and_all_leading_basic_runover()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
 -- c1
 -- c2
@@ -917,7 +927,7 @@ CREATE TABLE t (id INTEGER);
     }
 
     #[test]
-    fn leading_comments_all_leading_stops_at_blank_line() -> Result<(), Box<dyn std::error::Error>>
+    fn leading_comments_all_leading_stops_at_blank_line() -> Result<(), Box<dyn core::error::Error>>
     {
         let src = "\
 -- c1
@@ -934,7 +944,7 @@ CREATE TABLE t (id INTEGER);
 
     #[test]
     fn leading_comments_all_single_one_multi_collects_singles_and_one_multiline()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
 /* m
 m */
@@ -951,7 +961,7 @@ CREATE TABLE t (id INTEGER);
 
     #[test]
     fn leading_comments_all_single_one_multi_stops_before_second_multiline()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
 /* m1 */
 /* m2 */
@@ -967,7 +977,7 @@ CREATE TABLE t (id INTEGER);
 
     #[test]
     fn leading_comments_single_nearest_can_return_multiline()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
 /* hello
 world */
@@ -1033,7 +1043,7 @@ CREATE TABLE t (id INTEGER);
 
     #[test]
     fn collapse_comments_with_leading_comments_allleading_collapses_correctly()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
 -- c1
 -- c2
@@ -1059,7 +1069,7 @@ CREATE TABLE t (id INTEGER);
 
     #[test]
     fn collapse_comments_with_leading_comments_single_nearest_preserves_kind()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
 -- c1
 -- c2
