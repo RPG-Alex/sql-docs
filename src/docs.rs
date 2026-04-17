@@ -358,10 +358,10 @@ mod tests {
     use alloc::{
         borrow::ToOwned,
         boxed::Box,
-        string::{String, ToString},
+        string::String,
         vec,
-        vec::Vec,
     };
+    #[cfg(feature = "std")]
     use core::fmt;
 
     use sqlparser::{
@@ -391,6 +391,7 @@ mod tests {
         assert_eq!(sql_doc_val_column.name(), "id");
     }
 
+        #[cfg(feature = "std")]
     fn single_line_comments_sql() -> &'static str {
         "-- Users table stores user account information
 CREATE TABLE users (
@@ -419,6 +420,7 @@ CREATE TABLE posts (
 );"
     }
 
+        #[cfg(feature = "std")]
     fn multiline_comments_sql() -> &'static str {
         r"/* Users table stores user account information 
 multiline */
@@ -458,6 +460,7 @@ CREATE TABLE posts (
 );"
     }
 
+    #[cfg(feature = "std")]
     fn no_comments_sql() -> &'static str {
         "CREATE TABLE users (
     id INTEGER PRIMARY KEY,
@@ -474,7 +477,7 @@ CREATE TABLE posts (
     published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );"
     }
-
+    #[cfg(feature = "std")]
     fn mixed_comments_sql() -> &'static str {
         "-- interstitial Comment above statements (should be ignored)
 
@@ -800,18 +803,20 @@ CREATE TABLE posts (
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     struct FailOnNthWrite {
         fail_at: usize,
         writes: usize,
         sink: String,
     }
-
+    #[cfg(feature = "std")]
     impl FailOnNthWrite {
+
         fn new(fail_at: usize) -> Self {
             Self { fail_at, writes: 0, sink: String::new() }
         }
     }
-
+    #[cfg(feature = "std")]
     impl fmt::Write for FailOnNthWrite {
         fn write_str(&mut self, s: &str) -> fmt::Result {
             self.writes += 1;
@@ -823,11 +828,13 @@ CREATE TABLE posts (
         }
     }
 
+    #[cfg(feature = "std")]
     fn run_fail_at<T: fmt::Display>(v: &T, fail_at: usize) -> Result<(), fmt::Error> {
         let mut w = FailOnNthWrite::new(fail_at);
         fmt::write(&mut w, format_args!("{v}"))
     }
 
+    #[cfg(feature = "std")]
     fn count_writes<T: fmt::Display>(v: &T) -> usize {
         let mut w = FailOnNthWrite { fail_at: usize::MAX, writes: 0, sink: String::new() };
         let _ = fmt::write(&mut w, format_args!("{v}"));

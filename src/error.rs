@@ -136,7 +136,9 @@ mod tests {
     #[cfg(not(feature = "std"))]
     use alloc::{string::ToString, vec};
 
-    use crate::{docs::TableDoc, error::DocError};
+    #[cfg(feature = "std")]
+    use crate::TableDoc;
+    use crate::error::DocError;
 
     #[cfg(feature = "std")]
     #[test]

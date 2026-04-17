@@ -521,16 +521,15 @@ fn generate_docs_from_strs_with_paths<D: Dialect + Default>(
 
 #[cfg(test)]
 mod tests {
-    use alloc::{borrow::ToOwned, boxed::Box, vec, vec::Vec};
+    use alloc::{boxed::Box, vec};
 
     use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 
+    #[cfg(feature = "std")]
+    use crate::{LeadingCommentCapture, MultiFlatten, SqlDocBuilder, docs::{ColumnDoc, TableDoc}};
     use crate::{
         SqlDoc,
-        comments::LeadingCommentCapture,
-        docs::{ColumnDoc, TableDoc},
         error::DocError,
-        sql_doc::{MultiFlatten, SqlDocBuilder},
     };
 
     #[cfg(feature = "std")]
@@ -642,6 +641,7 @@ mod tests {
         assert!(matches!(duplicate_tables_err, Err(DocError::DuplicateTablesFound { .. })));
     }
 
+    #[cfg(feature = "std")]
     fn sort_tables(tables: &mut [TableDoc]) {
         tables.sort_by(|a, b| {
             let a_key = (a.schema().unwrap_or(""), a.name());
@@ -759,6 +759,8 @@ mod tests {
     #[test]
     fn test_sql_builder_deny_from_path() {
         use std::{path::PathBuf, vec};
+
+        use crate::{LeadingCommentCapture, MultiFlatten, SqlDocBuilder};
         let actual_builder = SqlDoc::from_path("path").deny("path1").deny("path2");
         let expected_builder = SqlDocBuilder {
             source: crate::sql_doc::SqlFileDocSource::File(PathBuf::from("path")),

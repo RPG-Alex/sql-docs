@@ -588,7 +588,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
         Ok(())
     }
-
+    #[cfg(feature = "std")]
     fn assert_parsed_comments_eq(parsed: &Comments, expected: &[&str]) {
         let comments = parsed.comments();
         assert_eq!(
@@ -603,7 +603,7 @@ mod tests {
             assert_eq!(expected[i], comment.text(), "comment at index {i} did not match");
         }
     }
-
+    #[cfg(feature = "std")]
     fn single_line_comments_sql() -> &'static str {
         "-- Users table stores user account information
 CREATE TABLE users (
@@ -631,7 +631,7 @@ CREATE TABLE posts (
     published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );"
     }
-
+    #[cfg(feature = "std")]
     fn multiline_comments_sql() -> &'static str {
         r"/* Users table stores user account information 
 multiline */
@@ -670,7 +670,7 @@ CREATE TABLE posts (
     published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );"
     }
-
+    #[cfg(feature = "std")]
     fn no_comments_sql() -> &'static str {
         "CREATE TABLE users (
     id INTEGER PRIMARY KEY,
@@ -687,7 +687,7 @@ CREATE TABLE posts (
     published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );"
     }
-
+    #[cfg(feature = "std")]
     fn mixed_comments_sql() -> &'static str {
         "-- interstitial Comment above statements (should be ignored)
 
@@ -719,7 +719,7 @@ CREATE TABLE posts (
 );
 "
     }
-
+    #[cfg(feature = "std")]
     fn expected_single_line_comments() -> &'static [&'static str] {
         &[
             "Users table stores user account information",
@@ -735,7 +735,7 @@ CREATE TABLE posts (
             "When the post was created",
         ]
     }
-
+    #[cfg(feature = "std")]
     fn expected_multiline_comments() -> &'static [&'static str] {
         &[
             "Users table stores user account information\nmultiline",
@@ -751,7 +751,7 @@ CREATE TABLE posts (
             "When the post was created\nmultiline",
         ]
     }
-
+    #[cfg(feature = "std")]
     fn expected_mixed_comments() -> &'static [&'static str] {
         &[
             "interstitial Comment above statements (should be ignored)",
