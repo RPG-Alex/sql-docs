@@ -207,7 +207,7 @@ impl Comments {
     /// Build all leading comments from a parsed SQL file
     ///
     /// # Parameters
-    /// - `file`: the [`ParsedSqlFile`] that needs to be parsed for comments
+    /// - `file`: the [`ParsedSqlSource`] that needs to be parsed for comments
     ///
     /// # Errors
     /// - Will return [`CommentError::UnmatchedMultilineCommentStart`] if a

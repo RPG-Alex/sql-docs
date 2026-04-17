@@ -175,12 +175,12 @@ impl TableDoc {
         columns.sort_by(|a, b| a.name().cmp(b.name()));
         Self { schema, name, doc, columns, path }
     }
-    /// Getter method for retrieving the table's [`Path`]
+    /// Getter method for retrieving the table's [`std::path::Path`]
     #[must_use]
     pub fn path(&self) -> Option<&std::path::Path> {
         self.path.as_deref()
     }
-    /// Setter for updating the table [`PathBuf`] source
+    /// Setter for updating the table [`std::path::PathBuf`] source
     pub fn set_path(&mut self, path: Option<impl Into<std::path::PathBuf>>) {
         self.path = path.map(Into::into);
     }
@@ -234,7 +234,7 @@ impl SqlFileDoc {
     /// - Comment spans into a format suitable for documentation generation.
     ///
     /// # Parameters
-    /// - `source`: the [`ParsedSqlFile`]
+    /// - `source`: the [`ParsedSqlSource`]
     /// - `comments`: the parsed [`Comments`]
     ///
     /// # Errors

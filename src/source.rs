@@ -31,7 +31,7 @@ impl SqlSource {
     /// Loads a [`SqlSource`] from the given path.
     ///
     /// # Errors
-    /// - Returns an [`io::Error`] if the file cannot be read.
+    /// - Returns an [`std::io::Error`] if the file cannot be read.
     pub fn from_path(path: &std::path::Path) -> std::io::Result<Self> {
         let source = crate::files::SqlContent::from_path(path)?;
         let content = source.content().to_owned();
@@ -49,7 +49,7 @@ impl SqlSource {
     pub fn path(&self) -> Option<&std::path::Path> {
         self.path.as_deref()
     }
-    /// Returns the [`PathBuf`] for the current path
+    /// Returns the [`std::path::PathBuf`] for the current path
     #[must_use]
     pub fn path_into_path_buf(&self) -> Option<std::path::PathBuf> {
         self.path.clone()
@@ -65,7 +65,7 @@ impl SqlSource {
     ///
     /// # Errors
     ///
-    /// Returns an [`io::Error`] if directory traversal fails or if any of the
+    /// Returns an [`std::io::Error`] if directory traversal fails or if any of the
     /// discovered SQL files cannot be read.
     #[cfg(feature = "std")]
     pub fn sql_sources(path: &std::path::Path, deny_list: &[String]) -> std::io::Result<Vec<Self>> {
