@@ -355,12 +355,7 @@ fn schema_and_table(name: &ObjectName) -> Result<(Option<String>, String), DocEr
 
 #[cfg(test)]
 mod tests {
-    use alloc::{
-        borrow::ToOwned,
-        boxed::Box,
-        string::String,
-        vec,
-    };
+    use alloc::{borrow::ToOwned, boxed::Box, string::String, vec};
     #[cfg(feature = "std")]
     use core::fmt;
 
@@ -391,7 +386,7 @@ mod tests {
         assert_eq!(sql_doc_val_column.name(), "id");
     }
 
-        #[cfg(feature = "std")]
+    #[cfg(feature = "std")]
     fn single_line_comments_sql() -> &'static str {
         "-- Users table stores user account information
 CREATE TABLE users (
@@ -420,7 +415,7 @@ CREATE TABLE posts (
 );"
     }
 
-        #[cfg(feature = "std")]
+    #[cfg(feature = "std")]
     fn multiline_comments_sql() -> &'static str {
         r"/* Users table stores user account information 
 multiline */
@@ -811,7 +806,6 @@ CREATE TABLE posts (
     }
     #[cfg(feature = "std")]
     impl FailOnNthWrite {
-
         fn new(fail_at: usize) -> Self {
             Self { fail_at, writes: 0, sink: String::new() }
         }

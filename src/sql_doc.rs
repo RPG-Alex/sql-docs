@@ -293,7 +293,7 @@ enum SqlFileDocSource<'a> {
 }
 
 #[cfg(feature = "std")]
-impl<'a> SqlDocBuilder<'a> {
+impl SqlDocBuilder<'_> {
     /// Method for adding an item to the deny list
     ///
     /// # Parameters
@@ -526,11 +526,11 @@ mod tests {
     use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 
     #[cfg(feature = "std")]
-    use crate::{LeadingCommentCapture, MultiFlatten, SqlDocBuilder, docs::{ColumnDoc, TableDoc}};
     use crate::{
-        SqlDoc,
-        error::DocError,
+        LeadingCommentCapture, MultiFlatten, SqlDocBuilder,
+        docs::{ColumnDoc, TableDoc},
     };
+    use crate::{SqlDoc, error::DocError};
 
     #[cfg(feature = "std")]
     #[test]
