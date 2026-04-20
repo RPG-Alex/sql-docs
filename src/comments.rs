@@ -236,7 +236,6 @@ impl Comments {
         let mut start_line = 1u64;
         let mut start_col = 1u64;
 
-        let mut line_num = 1u64;
         let mut col;
 
         let mut in_single = false;
@@ -244,7 +243,7 @@ impl Comments {
 
         let mut buf = String::new();
 
-        for line in src.lines() {
+        for (line_num, line) in (1u64..).zip(src.lines()) {
             col = 1;
             let mut chars = line.chars().peekable();
             while let Some(c) = chars.next() {
@@ -326,7 +325,6 @@ impl Comments {
             } else if in_multi {
                 buf.push('\n');
             }
-            line_num += 1;
         }
         // EOF: close any open comments
         if in_multi {
