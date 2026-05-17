@@ -355,6 +355,9 @@ fn schema_and_table(name: &ObjectName) -> Result<(Option<String>, String), DocEr
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
     use alloc::{borrow::ToOwned, boxed::Box, string::String, vec};
     #[cfg(feature = "std")]
     use core::fmt;
@@ -371,6 +374,7 @@ mod tests {
 
     #[cfg(not(feature = "std"))]
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_sql_docs_struct() {
         let column_doc = ColumnDoc::new("id".to_owned(), Some("The ID for the table".to_owned()));
         let columns = vec![column_doc];
@@ -753,6 +757,7 @@ CREATE TABLE posts (
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn schema_and_table_errors_when_no_identifier_parts() {
         let name = ObjectName(vec![func_part("now")]);
 
@@ -770,6 +775,7 @@ CREATE TABLE posts (
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn schema_and_table_single_identifier() {
         let name = ObjectName(vec![ObjectNamePart::Identifier(ident("users"))]);
 
@@ -783,6 +789,7 @@ CREATE TABLE posts (
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn schema_and_table_schema_and_table_with_function_ignored()
     -> Result<(), Box<dyn core::error::Error>> {
         let name = ObjectName(vec![
@@ -868,6 +875,7 @@ CREATE TABLE posts (
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn column_doc_set_doc_updates_doc() {
         let mut col = ColumnDoc::new("id".to_owned(), None);
         assert_eq!(col.name(), "id");

@@ -132,6 +132,9 @@ impl From<ParserError> for DocError {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
 
     #[cfg(not(feature = "std"))]
     use alloc::{string::ToString, vec};
@@ -246,6 +249,7 @@ mod tests {
         TableDoc::new(None, name.to_string(), None, vec![], None)
     }
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_doc_error_display_invalid_object_name() {
         let e =
             DocError::InvalidObjectName { message: "bad object".to_string(), line: 12, column: 34 };
@@ -253,6 +257,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_doc_error_display_table_not_found() {
         let e = DocError::TableNotFound { name: "users".to_string() };
         assert_eq!(e.to_string(), "Table not found in SqlDoc: users");
@@ -270,6 +275,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_doc_error_source_none_for_non_wrapped_variants() {
         use core::error::Error as _;
         let invalid = DocError::InvalidObjectName { message: "x".to_string(), line: 1, column: 1 };
@@ -281,12 +287,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_doc_error_display_column_not_found() {
         let e = DocError::ColumnNotFound { name: "id".to_string() };
         assert_eq!(e.to_string(), "Column not found in TableDoc: id");
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_doc_error_display_duplicate_columns_found() {
         use crate::docs::ColumnDoc;
 
@@ -300,6 +308,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_doc_error_source_none_for_column_variants() {
         use core::error::Error as _;
 
@@ -311,6 +320,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_doc_error_display_table_with_schema_not_found() {
         let e = DocError::TableWithSchemaNotFound {
             name: "events".to_string(),
@@ -320,6 +330,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_doc_error_source_none_for_table_with_schema_not_found() {
         use core::error::Error as _;
         let e = DocError::TableWithSchemaNotFound {
