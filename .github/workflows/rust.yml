@@ -55,6 +55,20 @@ jobs:
       - name: Test no_std build
         run: cargo test --no-default-features
 
+  wasm_test:
+    name: WASM tests (wasm32-unknown-unknown, node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: latest
+      - name: Run WASM tests via Node
+        run: wasm-pack test --node --no-default-features
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest

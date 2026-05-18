@@ -25,6 +25,9 @@ fuzzing = []
 [dependencies]
 sqlparser = { git = "https://github.com/LucaCappelletti94/sqlparser-rs", branch = "dialect-derives" }
 
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+
 [lints.rust]
 missing_docs = "forbid"
 unreachable_patterns = "forbid"

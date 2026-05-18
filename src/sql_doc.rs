@@ -521,6 +521,9 @@ fn generate_docs_from_strs_with_paths<D: Dialect + Default>(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
     use alloc::{boxed::Box, vec};
 
     use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
@@ -613,6 +616,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_table_err() {
         let empty_set = SqlDoc::new(vec![]);
         let empty_table_err = empty_set.table("name", None);
@@ -812,6 +816,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_preserve_multiline_keeps_newlines_in_docs() -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
         /* Table Doc line1
@@ -832,6 +837,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_flatten_multiline_no_separator_removes_newlines()
     -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
@@ -854,6 +860,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_flatten_multiline_with_separator_inserts_separator()
     -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
@@ -888,6 +895,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_builder_build_with_flattening() -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
         /* Table Doc line1
@@ -1138,6 +1146,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_postgres_dialect_parses_postgres_only_function_syntax()
     -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
@@ -1161,6 +1170,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_generic_dialect_ignores_non_table_pg_statements_and_still_builds()
     -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"

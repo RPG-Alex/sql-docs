@@ -90,6 +90,9 @@ impl SqlSource {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
     use crate::source::SqlSource;
 
     #[cfg(feature = "std")]
@@ -129,6 +132,7 @@ mod tests {
 
     #[cfg(not(feature = "std"))]
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_sql_file_new_from_str_has_no_path_and_preserves_content() {
         use crate::alloc::borrow::ToOwned;
         let sql = "SELECT * FROM users;";

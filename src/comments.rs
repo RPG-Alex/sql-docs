@@ -464,6 +464,9 @@ pub enum MultiFlatten<'a> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
     use alloc::{
         borrow::ToOwned,
         boxed::Box,
@@ -476,6 +479,7 @@ mod tests {
     use crate::comments::{Comment, CommentError, CommentKind, Comments, Location, Span};
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn location_new_and_default() {
         let mut location = Location::new(2, 5);
         location.column = 20;
@@ -488,6 +492,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn span_default_and_updates() {
         let default = Span::default();
         assert_eq!(default.start, Location::default());
@@ -500,6 +505,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn comments_with_comment_kind() {
         let raw_comment = "-- a comment";
         let len = raw_comment.len() as u64;
@@ -519,6 +525,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn multiline_comment_span() {
         let kind = CommentKind::MultiLine;
         let span = Span::new(Location { line: 1, column: 1 }, Location { line: 2, column: 9 });
@@ -859,6 +866,7 @@ CREATE TABLE posts (
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_comment_error() {
         let unterminated =
             CommentError::UnterminatedMultiLineComment { start: Location::default() };
@@ -872,6 +880,7 @@ CREATE TABLE posts (
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_comments() {
         let comment_vec = vec![
             Comment::new(
@@ -902,11 +911,13 @@ CREATE TABLE posts (
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn leading_comment_capture_default_is_single_nearest() {
         assert_eq!(LeadingCommentCapture::default(), LeadingCommentCapture::SingleNearest);
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn leading_comments_single_nearest_and_all_leading_basic_runover()
     -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
@@ -925,6 +936,7 @@ CREATE TABLE t (id INTEGER);
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn leading_comments_all_leading_stops_at_blank_line() -> Result<(), Box<dyn core::error::Error>>
     {
         let src = "\
@@ -941,6 +953,7 @@ CREATE TABLE t (id INTEGER);
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn leading_comments_all_single_one_multi_collects_singles_and_one_multiline()
     -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
@@ -958,6 +971,7 @@ CREATE TABLE t (id INTEGER);
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn leading_comments_all_single_one_multi_stops_before_second_multiline()
     -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
@@ -974,6 +988,7 @@ CREATE TABLE t (id INTEGER);
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn leading_comments_single_nearest_can_return_multiline()
     -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
@@ -989,12 +1004,14 @@ CREATE TABLE t (id INTEGER);
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn collapse_comments_empty_returns_none() {
         let comments = Comments::new(vec![]);
         assert!(comments.collapse_comments(crate::comments::MultiFlatten::NoFlat).is_none());
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn collapse_comments_single_returns_same_comment() {
         let c = Comment::new(
             "solo".to_owned(),
@@ -1012,6 +1029,7 @@ CREATE TABLE t (id INTEGER);
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn collapse_comments_multiple_joins_text_and_expands_span_and_sets_multiline_kind() {
         let c1 = Comment::new(
             "a".to_owned(),
@@ -1040,6 +1058,7 @@ CREATE TABLE t (id INTEGER);
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn collapse_comments_with_leading_comments_allleading_collapses_correctly()
     -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
@@ -1066,6 +1085,7 @@ CREATE TABLE t (id INTEGER);
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn collapse_comments_with_leading_comments_single_nearest_preserves_kind()
     -> Result<(), Box<dyn core::error::Error>> {
         let src = "\
@@ -1087,6 +1107,7 @@ CREATE TABLE t (id INTEGER);
     }
     use crate::comments::flatten_lines;
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_flatten_lines_behavior() {
         let input = "a\nb\nc";
         let no_sep = flatten_lines(input, crate::comments::MultiFlatten::FlattenWithNone);

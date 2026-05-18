@@ -113,6 +113,9 @@ mod tests {
     use super::*;
     use crate::source::SqlSource;
 
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
     #[cfg(feature = "std")]
     #[test]
     fn parsed_sql_file_parses_single_statement() -> Result<(), Box<dyn std::error::Error>> {
@@ -179,6 +182,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn parsed_sql_file_parse_postgres_handles_pg_function_syntax()
     -> Result<(), Box<dyn core::error::Error>> {
         let sql = r"
@@ -256,6 +260,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn parsed_sql_file_parse_invalid_sql_returns_error() {
         let sql = "CREATE TABLE";
         let src = SqlSource::from(sql.to_owned());
