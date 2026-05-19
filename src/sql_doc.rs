@@ -357,7 +357,7 @@ impl SqlDocBuilder<'_> {
 }
 
 #[cfg(not(feature = "std"))]
-impl<'a> SqlDocBuilder<'a> {
+impl SqlDocBuilder<'_> {
     /// Builds the [`SqlDoc`]
     ///
     ///

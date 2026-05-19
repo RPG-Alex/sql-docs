@@ -19,11 +19,11 @@ categories = [
 
 [features]
 default = ["std"]
-std = []
+std = ["sqlparser/std", "sqlparser/recursive-protection"]
 fuzzing = []
 
 [dependencies]
-sqlparser = "0.62"
+sqlparser = { version = "0.62", default-features = false }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3"
