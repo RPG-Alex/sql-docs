@@ -108,6 +108,24 @@ jobs:
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
 
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Read rust-version from Cargo.toml
+      id: rust-version
+      run: |
+        echo "toolchain=$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)" >> "$GITHUB_OUTPUT"
+    - name: Install the declared rust-version
+      uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de
+      with:
+        toolchain: ${{ steps.rust-version.outputs.toolchain }}
+    - name: Check both feature sets
+      run: |
+        cargo check --all-targets --all-features
+        cargo check --all-targets --no-default-features
+
   doc:
     name: Documentation
     runs-on: ubuntu-latest
